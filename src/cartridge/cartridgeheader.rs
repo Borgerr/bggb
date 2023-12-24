@@ -1,6 +1,7 @@
 use std::ops::Index;
 
-enum CartridgeType {
+#[derive(Debug, Clone)]
+pub enum CartridgeType {
     ROM_ONLY = 0x00,
 
     MBC1 = 0x01,
@@ -127,7 +128,7 @@ impl CartridgeType {
     }
 }
 
-struct CartridgeHeader {
+pub struct CartridgeHeader {
     // https://gbdev.io/pandocs/The_Cartridge_Header.html
     entry_point: [u8; 4],    // 0100-0103, 4 bytes
     nintendo_logo: [u8; 48], // 0104-0133, 48 bytes
@@ -168,7 +169,7 @@ impl CartridgeHeader {
         }
     }
 
-    pub fn read(&mut self, data: &[u8; 0x014f - 0x0100]) {
+    pub fn read(&mut self, data: &[u8]) {
         for i in 0..4 {
             self.entry_point[i] = data[i];
         }
@@ -207,10 +208,22 @@ impl CartridgeHeader {
         self.global_checksum[1] = data[79];
     }
 
-    pub fn from(data: &[u8; 0x014f - 0x0100]) -> CartridgeHeader {
+    pub fn from(data: &[u8]) -> CartridgeHeader {
         let mut ch = CartridgeHeader::new();
         ch.read(data);
         ch
+    }
+
+    pub fn cartridge_type(&self) -> CartridgeType {
+        self.cartridge_type.clone()
+    }
+
+    pub fn rom_shift_count(&self) -> u8 {
+        self.rom_shift_count
+    }
+
+    pub fn ram_size(&self) -> u8 {
+        self.ram_size
     }
 }
 
