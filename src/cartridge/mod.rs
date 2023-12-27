@@ -53,12 +53,6 @@ impl CartridgeData {
             }
 
             CartridgeType::MBC1 => {
-                if self.header.rom_shift_count() > 4 {
-                    return Err(MemoryError::CartTypeMismatch {
-                        ct: self.header.cartridge_type().clone(),
-                        reason: String::from("given ROM size is too large"),
-                    });
-                }
                 // no RAM specified
                 if self.header.ram_size() > 0 {
                     return Err(MemoryError::CartTypeMismatch {
@@ -67,8 +61,50 @@ impl CartridgeData {
                     });
                 }
 
-                self.rom = vec![0; 32768 * (1 << self.header.rom_shift_count())];
+                match self.header.rom_shift_count() {
+                    0x00 => {
+                        // 32 KiB of ROM, two banks
+                        self.rom = vec![0; 0x3fff]; // 0000-3fff, bank X0
+                        self.switchable_banks.push(vec![0; 0x3fff]); // 4000-7fff, bank 01
+                    }
+                    0x01 => {
+                        // 64 KiB of ROM, 4 banks
+                        self.add_banks_for_mbc1(4);
+                    }
+                    0x02 => {
+                        // 128 KiB of ROM, 8 banks
+                        self.add_banks_for_mbc1(8);
+                    }
+                    0x03 => {
+                        // 256 KiB of ROM, 16 banks
+                        self.add_banks_for_mbc1(16);
+                    }
+                    0x04 => {
+                        // 512 KiB of ROM, 32 banks
+                        self.add_banks_for_mbc1(32);
+                    }
+                    // for these last two cases, i.e. 1MiB+,
+                    // banks are different.
+                    // TODO: look into how they are different,
+                    // and organize accordingly
+                    0x05 => {
+                        // 1 MiB of ROM, 64 banks
+                        todo!()
+                    }
+                    0x06 => {
+                        // 2 MiB of ROM, 128 banks
+                        todo!()
+                    }
+                    _ => {
+                        return Err(MemoryError::CartTypeMismatch {
+                            ct: self.header.cartridge_type().clone(),
+                            reason: String::from("given ROM size is too large or incorrect"),
+                        })
+                    }
+                }
             }
+            /*
+            Implement all of these once we've confirmed the above cases work.
             CartridgeType::MBC1_RAM => {}
             CartridgeType::MBC1_RAM_BATTERY => {}
 
@@ -87,7 +123,7 @@ impl CartridgeData {
             CartridgeType::MBC5_RUMBLE => {}
             CartridgeType::MBC5_RUMBLE_RAM => {}
             CartridgeType::MBC5_RUMBLE_RAM_BATTERY => {}
-
+            */
             _ => {
                 return Err(MemoryError::UnsupportedCartType {
                     ct: self.header.cartridge_type().clone(),
@@ -96,5 +132,12 @@ impl CartridgeData {
         }
 
         Ok(())
+    }
+
+    fn add_banks_for_mbc1(&mut self, bank_count: u16) {
+        self.rom = vec![0; 0x3fff]; // covers first bank
+        for _ in 0..bank_count - 1 {
+            self.switchable_banks.push(vec![0; 0x3fff]);
+        }
     }
 }
