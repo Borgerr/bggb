@@ -134,9 +134,9 @@ pub struct CartridgeHeader {
     nintendo_logo: [u8; 48], // 0104-0133, 48 bytes
     title: [u8; 16],         // 0134-0143, 16 bytes
     // manufacturer code is addresses 0134-0143
-    cgb_only: bool,                // single byte entry at end of title
+    cgb_only: u8,                  // single byte entry at end of title
     new_licensee: [u8; 2],         // 0144-0145, 2 bytes, can change to enum
-    sgb_included: bool, // ignore any command packets if byte is set to val other than 0x03
+    sgb_included: u8, // ignore any command packets if byte is set to val other than 0x03
     cartridge_type: CartridgeType, // 0147, single byte
 
     rom_shift_count: u8,      // 0148, single byte
@@ -154,9 +154,9 @@ impl CartridgeHeader {
             entry_point: [0; 4],
             nintendo_logo: [0; 48],
             title: [0; 16],
-            cgb_only: false,
+            cgb_only: 0,
             new_licensee: [0; 2],
-            sgb_included: false,
+            sgb_included: 0,
             cartridge_type: CartridgeType::ROM_ONLY,
 
             rom_shift_count: 0,
@@ -182,11 +182,11 @@ impl CartridgeHeader {
             self.title[i] = data[i + 52];
         }
 
-        self.cgb_only = self.title[15] == 0xc0;
+        self.cgb_only = self.title[15]; // == 0xc0
         self.new_licensee[0] = data[68];
         self.new_licensee[1] = data[69];
 
-        self.sgb_included = data[70] == 0x03;
+        self.sgb_included = data[70]; // == 0x03
 
         self.cartridge_type = CartridgeType::from_num(data[71]);
 
@@ -217,13 +217,17 @@ impl CartridgeHeader {
     pub fn cartridge_type(&self) -> CartridgeType {
         self.cartridge_type.clone()
     }
-
     pub fn rom_shift_count(&self) -> u8 {
         self.rom_shift_count
     }
-
     pub fn ram_size(&self) -> u8 {
         self.ram_size
+    }
+    pub fn sgb_included(&self) -> bool {
+        self.sgb_included == 0x03
+    }
+    pub fn cgb_only(&self) -> bool {
+        self.cgb_only == 0xc0
     }
 }
 
@@ -243,29 +247,25 @@ impl Index<usize> for CartridgeHeader {
         // manufacturer code is omitted in this version of the emulator
         else if (index >= 0x144) && (index <= 0x145) {
             return &self.new_licensee[index - 0x144];
-        } else if (index == 0x146) {
-            if self.sgb_included {
-                return &0x03;
-            } else {
-                return &0;
-            }
+        } else if index == 0x146 {
+            return &self.sgb_included;
         }
         // skipped over cartridge type address since there's weirdness there
-        else if (index == 0x148) {
+        else if index == 0x148 {
             return &self.rom_shift_count;
-        } else if (index == 0x149) {
+        } else if index == 0x149 {
             return &self.ram_size;
-        } else if (index == 0x14a) {
+        } else if index == 0x14a {
             return &self.destination_code;
-        } else if (index == 0x14b) {
+        } else if index == 0x14b {
             return &self.old_licensee;
-        } else if (index == 0x14c) {
+        } else if index == 0x14c {
             return &self.version_number;
-        } else if (index == 0x14d) {
+        } else if index == 0x14d {
             return &self.header_checksum;
-        } else if (index == 0x14e) {
+        } else if index == 0x14e {
             return &self.global_checksum[0];
-        } else if (index == 0x14d) {
+        } else if index == 0x14d {
             return &self.global_checksum[1];
         }
 
