@@ -1,3 +1,5 @@
+use std::ops::{Index, IndexMut};
+
 use self::cartridgeheader::{CartridgeHeader, CartridgeType};
 
 mod cartridgeheader;
@@ -18,10 +20,10 @@ pub struct CartridgeData {
 impl CartridgeData {
     pub fn new() -> CartridgeData {
         CartridgeData {
-            header: CartridgeHeader::new(),
-            rom: vec![],
-            switchable_banks: vec![],
-            ram: vec![],
+            header: CartridgeHeader::new(), // always addresses $0100 - $014F
+            rom: Vec::new(),
+            switchable_banks: Vec::new(),
+            ram: Vec::new(),
         }
     }
 
@@ -139,5 +141,67 @@ impl CartridgeData {
         for _ in 0..bank_count - 1 {
             self.switchable_banks.push(vec![0; 0x3fff]);
         }
+    }
+}
+
+impl Index<usize> for CartridgeData {
+    type Output = u8;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self.header.cartridge_type() {
+            CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
+                if (index <= 0x014f) && (index >= 0x0100) {
+                    // header
+                    return &self.header[index];
+                } else if (index >= 0x0000) && (index <= 0x7fff) {
+                    // rom
+                    return &self.rom[index];
+                } else {
+                    // ram
+                    return &self.ram[index - 0x0a000];
+                }
+            }
+
+            CartridgeType::MBC1 => {
+                if (index <= 0x01f) && (index >= 0x0100) {
+                    // header
+                    return &self.header[index];
+                } else if index <= 0x3fff {
+                    // rom bank 1
+                    return &self.rom[index];
+                } else {
+                    // switchable rom bank
+                    return &self.switchable_banks[0][index - 0x4000];
+                }
+            }
+            /*
+            Implement all of these once we've confirmed the above cases work.
+            CartridgeType::MBC1_RAM => {}
+            CartridgeType::MBC1_RAM_BATTERY => {}
+
+            CartridgeType::MBC2 => {}
+            CartridgeType::MBC2_BATTERY => {}
+
+            CartridgeType::MBC3_TIMER_BATTERY => {}
+            CartridgeType::MBC3_TIMER_RAM_BATTERY => {}
+            CartridgeType::MBC3 => {}
+            CartridgeType::MBC3_RAM => {}
+            CartridgeType::MBC3_RAM_BATTERY => {}
+
+            CartridgeType::MBC5 => {}
+            CartridgeType::MBC5_RAM => {}
+            CartridgeType::MBC5_RAM_BATTERY => {}
+            CartridgeType::MBC5_RUMBLE => {}
+            CartridgeType::MBC5_RUMBLE_RAM => {}
+            CartridgeType::MBC5_RUMBLE_RAM_BATTERY => {}
+            */
+            _ => &0,
+        }
+    }
+}
+
+impl IndexMut<usize> for CartridgeData {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        todo!()
     }
 }
