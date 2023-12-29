@@ -31,23 +31,13 @@ impl CartridgeData {
     }
 
     pub fn read(&mut self, data: Vec<u8>) -> Result<(), MemoryError> {
-        self.header.read(&data[0x0100..0x014f]);
+        self.header.read(&data[0x0100..0x014f + 1]);
 
         // big meaty part of code put in a different function for readability
         self.organize_memory()?;
 
-        for i in 0..self.rom.len() {
-            self.rom[i] = data[i];
-        }
-
-        let mut i = self.rom.len();
-        let mut bank_number = 1;
-        for bank in &mut self.switchable_banks {
-            for _ in 0..self.rom.len() {
-                bank[i - (bank_number * self.rom.len())] = data[i];
-                i += 1;
-            }
-            bank_number += 1;
+        for i in 0..data.len() {
+            self[i] = data[i];
         }
 
         Ok(())
@@ -71,7 +61,8 @@ impl CartridgeData {
                 }
 
                 // no MBC, no memory beyond 32 KiB. RAM addressed the same as ROM
-                self.rom = vec![0; 32768];
+                self.rom = vec![0; 0x4000];
+                self.switchable_banks.push(vec![0; 0x4000]);
             }
 
             CartridgeType::MBC1 => {
@@ -86,8 +77,8 @@ impl CartridgeData {
                 match self.header.rom_shift_count() {
                     0x00 => {
                         // 32 KiB of ROM, two banks
-                        self.rom = vec![0; 0x3fff]; // 0000-3fff, bank X0
-                        self.switchable_banks.push(vec![0; 0x3fff]); // 4000-7fff, bank 01
+                        self.rom = vec![0; 0x4000]; // 0000-3fff, bank X0
+                        self.switchable_banks.push(vec![0; 0x4000]); // 4000-7fff, bank 01
                     }
                     0x01 => {
                         // 64 KiB of ROM, 4 banks
@@ -176,12 +167,11 @@ impl IndexMut<usize> for CartridgeData {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self.header.cartridge_type() {
             CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
-                if (index <= 0x014f) && (index >= 0x0100) {
-                    // header
-                    todo!();
-                } else if (index >= 0x0000) && (index <= 0x7fff) {
-                    // rom
+                if index <= 0x3fff {
+                    // rom, includes header
                     return &mut self.rom[index];
+                } else if (index > 0x3fff) && (index <= 0x7fff) {
+                    return &mut self.switchable_banks[0][index - 0x3fff];
                 } else {
                     // ram
                     return &mut self.ram[index - 0x0a000];
@@ -189,11 +179,8 @@ impl IndexMut<usize> for CartridgeData {
             }
 
             CartridgeType::MBC1 => {
-                if (index <= 0x01f) && (index >= 0x0100) {
-                    // header
-                    todo!();
-                } else if index <= 0x3fff {
-                    // rom bank 1
+                if index <= 0x3fff {
+                    // rom bank 1, includes header
                     return &mut self.rom[index];
                 } else {
                     // switchable rom bank
@@ -206,4 +193,34 @@ impl IndexMut<usize> for CartridgeData {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::cartridge::cartridgeheader::CartridgeHeader;
+
+    use super::CartridgeData;
+
+    #[test]
+    fn new_blank_data() {
+        let cd = CartridgeData::new();
+        assert_eq!(cd.header, CartridgeHeader::new());
+        assert_eq!(cd.rom, Vec::<u8>::new());
+        assert_eq!(cd.switchable_banks, Vec::<Vec<u8>>::new());
+        assert_eq!(cd.ram, Vec::<u8>::new());
+    }
+
+    #[test]
+    #[should_panic]
+    fn reading_blank_invalid() {
+        let mut cd = CartridgeData::new();
+        let _ = cd.read(Vec::new());
+    }
+    #[test]
+    fn reading_16kib_zerovec_valid() {
+        let result = CartridgeData::from(vec![0; 0x3fff]);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_32kib_zerovec_valid() {
+        let result = CartridgeData::from(vec![0; 0x7fff]);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+}
