@@ -1,4 +1,4 @@
-mod cartridge;
+mod memory;
 
 fn main() {
     println!("Hello, world!");

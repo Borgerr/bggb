@@ -10,19 +10,19 @@ pub enum MemoryError {
     UnsupportedCartType { ct: CartridgeType },
 }
 
-pub struct CartridgeData {
+pub struct Memory {
     header: CartridgeHeader,
     rom: Vec<u8>,
     switchable_banks: Vec<Vec<u8>>,
     ram: Vec<u8>,
 }
 
-impl CartridgeData {
+impl Memory {
     // Other goals:
     // add rest of MBC1 and MBC2/3/5
 
-    pub fn new() -> CartridgeData {
-        CartridgeData {
+    pub fn new() -> Memory {
+        Memory {
             header: CartridgeHeader::new(), // always addresses $0100 - $014F
             rom: Vec::new(),
             switchable_banks: Vec::new(),
@@ -43,7 +43,7 @@ impl CartridgeData {
         Ok(())
     }
 
-    pub fn from(data: Vec<u8>) -> Result<CartridgeData, MemoryError> {
+    pub fn from(data: Vec<u8>) -> Result<Memory, MemoryError> {
         let mut cd = Self::new();
         cd.read(data)?;
 
@@ -134,7 +134,7 @@ impl CartridgeData {
     }
 }
 
-impl Index<usize> for CartridgeData {
+impl Index<usize> for Memory {
     type Output = u8;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -163,7 +163,7 @@ impl Index<usize> for CartridgeData {
     }
 }
 
-impl IndexMut<usize> for CartridgeData {
+impl IndexMut<usize> for Memory {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self.header.cartridge_type() {
             CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
@@ -194,13 +194,13 @@ impl IndexMut<usize> for CartridgeData {
 
 #[cfg(test)]
 mod tests {
-    use crate::cartridge::cartridgeheader::CartridgeHeader;
+    use crate::memory::cartridgeheader::CartridgeHeader;
 
-    use super::CartridgeData;
+    use super::Memory;
 
     #[test]
     fn new_blank_data() {
-        let cd = CartridgeData::new();
+        let cd = Memory::new();
         assert_eq!(cd.header, CartridgeHeader::new());
         assert_eq!(cd.rom, Vec::<u8>::new());
         assert_eq!(cd.switchable_banks, Vec::<Vec<u8>>::new());
@@ -210,17 +210,26 @@ mod tests {
     #[test]
     #[should_panic]
     fn reading_blank_invalid() {
-        let mut cd = CartridgeData::new();
+        let mut cd = Memory::new();
         let _ = cd.read(Vec::new());
     }
     #[test]
     fn reading_16kib_zerovec_valid() {
-        let result = CartridgeData::from(vec![0; 0x3fff]);
+        let result = Memory::from(vec![0; 0x3fff]);
         assert!(if let Ok(_) = result { true } else { false });
     }
     #[test]
     fn reading_32kib_zerovec_valid() {
-        let result = CartridgeData::from(vec![0; 0x7fff]);
+        let result = Memory::from(vec![0; 0x7fff]);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_zerovec_romram_valid() {
+        let mut rom = vec![0; 0xbfff];
+        rom[0x0100 + 71] = 0x08; // cartridge type includes ram
+        rom[0x0100 + 73] = 0x02; // ram size is 8KiB
+
+        let result = Memory::from(rom);
         assert!(if let Ok(_) = result { true } else { false });
     }
 }

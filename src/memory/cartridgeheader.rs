@@ -234,7 +234,7 @@ impl CartridgeHeader {
 
 #[cfg(test)]
 mod tests {
-    use crate::cartridge::cartridgeheader::{CartridgeHeader, CartridgeType};
+    use crate::memory::cartridgeheader::{CartridgeHeader, CartridgeType};
 
     #[test]
     fn create_blank_header() {
