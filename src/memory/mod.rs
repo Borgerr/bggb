@@ -4,7 +4,7 @@ use self::cartridgeheader::{CartridgeHeader, CartridgeType};
 
 mod cartridgeheader;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MemoryError {
     CartTypeMismatch { ct: CartridgeType, reason: String },
     UnsupportedCartType { ct: CartridgeType },
@@ -76,7 +76,7 @@ impl Memory {
             CartridgeType::ROM_ONLY => {
                 if self.header.rom_shift_count() > 0 {
                     return Err(MemoryError::CartTypeMismatch {
-                        ct: self.header.cartridge_type().clone(),
+                        ct: self.header.cartridge_type(),
                         reason: String::from("given ROM size is too large"),
                     });
                 }
@@ -279,7 +279,10 @@ impl IndexMut<usize> for Memory {
 
 #[cfg(test)]
 mod tests {
-    use crate::memory::cartridgeheader::CartridgeHeader;
+    use crate::memory::{
+        cartridgeheader::{CartridgeHeader, CartridgeType},
+        MemoryError,
+    };
 
     use super::Memory;
 
@@ -291,6 +294,10 @@ mod tests {
         assert_eq!(cd.switchable_banks, Vec::<Vec<u8>>::new());
         assert_eq!(cd.ram, Vec::<u8>::new());
     }
+
+    /*
+       reading tests
+    */
 
     #[test]
     #[should_panic]
@@ -317,4 +324,199 @@ mod tests {
         let result = Memory::from(rom);
         assert!(if let Ok(_) = result { true } else { false });
     }
+
+    #[test]
+    fn reading_16kib_zerovec_ram_romonly_invalid() {
+        let mut rom = vec![0; 0x4000];
+        rom[0x0100 + 71] = 0x00; // cartridge type does not include ram
+        rom[0x0100 + 73] = 0x02; // ram size is 8KiB; too large for cartridge type!
+
+        let result = Memory::from(rom);
+
+        if let Err(e) = result {
+            assert_eq!(
+                e,
+                MemoryError::CartTypeMismatch {
+                    ct: CartridgeType::ROM_ONLY,
+                    reason: String::from("header says RAM included with wrong cartridge type"),
+                }
+            )
+        } else {
+            // not an error, fail this test
+            assert!(false);
+        }
+    }
+    #[test]
+    fn reading_32kib_zerovec_ram_romonly_invalid() {
+        let mut rom = vec![0; 0x8000];
+        rom[0x0100 + 71] = 0x00; // cartridge type does not include ram
+        rom[0x0100 + 73] = 0x02; // ram size is 8KiB; too large for cartridge type!
+
+        let result = Memory::from(rom);
+
+        if let Err(e) = result {
+            assert_eq!(
+                e,
+                MemoryError::CartTypeMismatch {
+                    ct: CartridgeType::ROM_ONLY,
+                    reason: String::from("header says RAM included with wrong cartridge type"),
+                }
+            )
+        } else {
+            // not an error, fail this test
+            assert!(false);
+        }
+    }
+    #[test]
+    fn reading_zerovec_romonly_invalid_shiftcount() {
+        for i in 2..6 {
+            let mut rom = vec![0; 0x4000];
+            rom[0x0100 + 71] = 0x00; // cartridge type is ROM_ONLY
+
+            rom[0x0100 + 72] = i;
+            let result = Memory::from(rom);
+
+            if let Err(e) = result {
+                assert_eq!(
+                    e,
+                    MemoryError::CartTypeMismatch {
+                        ct: CartridgeType::ROM_ONLY,
+                        reason: String::from("given ROM size is too large"),
+                    }
+                )
+            } else {
+                // not an error, fail this test
+                assert!(false);
+            }
+        }
+    }
+    #[test]
+    fn reading_zerovec_romram_invalid_shiftcount() {
+        for i in 2..6 {
+            let mut rom = vec![0; 0x4000];
+            rom[0x0100 + 71] = 0x08; // cartridge type is ROM_RAM
+
+            rom[0x0100 + 72] = i;
+            let result = Memory::from(rom);
+
+            if let Err(e) = result {
+                assert_eq!(
+                    e,
+                    MemoryError::CartTypeMismatch {
+                        ct: CartridgeType::ROM_RAM,
+                        reason: String::from("given ROM size is too large"),
+                    }
+                )
+            } else {
+                // not an error, fail this test
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    fn reading_32kib_zerovec_mbc1_valid() {
+        let mut rom = vec![0; 0x8000];
+        rom[0x0100 + 71] = 0x01; // cartridge type is MBC1
+        rom[0x0100 + 73] = 0x00; // no ram
+
+        let result = Memory::from(rom);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_64kib_zerovec_mbc1_valid() {
+        let mut rom = vec![0; 0x10000];
+        rom[0x0147] = 0x01; // cartridge type is MBC1
+        rom[0x0148] = 0x01; // ROM size is 64KiB
+        rom[0x0149] = 0x00; // no ram
+
+        let result = Memory::from(rom);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_128kib_zerovec_mbc1_valid() {
+        let mut rom = vec![0; 0x20000];
+        rom[0x0147] = 0x01; // cartridge type is MBC1
+        rom[0x0148] = 0x02; // ROM size is 128KiB
+        rom[0x0149] = 0x00; // no ram
+
+        let result = Memory::from(rom);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_256kib_zerovec_mbc1_valid() {
+        let mut rom = vec![0; 0x40000];
+        rom[0x0147] = 0x01; // cartridge type is MBC1
+        rom[0x0148] = 0x03; // ROM size is 256KiB
+        rom[0x0149] = 0x00; // no ram
+
+        let result = Memory::from(rom);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    #[test]
+    fn reading_512kib_zerovec_mbc1_valid() {
+        let mut rom = vec![0; 0x80000];
+        rom[0x0147] = 0x01; // cartridge type is MBC1
+        rom[0x0148] = 0x04; // ROM size is 512KiB
+        rom[0x0149] = 0x00; // no ram
+
+        let result = Memory::from(rom);
+        assert!(if let Ok(_) = result { true } else { false });
+    }
+    // TODO: add 1MiB+ tests whenever we introduce that in implementation
+
+    #[test]
+    fn reading_zerovec_mbc1_with_ram_invalid() {
+        let mut rom = vec![0; 0x8000];
+        rom[0x0100 + 71] = 0x01; // cartridge type is MBC1
+        rom[0x0100 + 73] = 0x02; // ram size is 8KiB, too large for cartridge type!
+
+        let result = Memory::from(rom);
+        assert!(if let Err(_) = result { true } else { false });
+    }
+
+    #[test]
+    fn reading_zerovec_mbc1_invalid_shiftcount() {
+        let mut rom = vec![0; 4000];
+        rom[0x0100 + 71] = 0x01; // cartridge type is MBC1
+        rom[0x0100 + 72] = 0x42; // invalid shift count
+
+        let result = Memory::from(rom);
+        if let Err(e) = result {
+            assert_eq!(
+                e,
+                MemoryError::CartTypeMismatch {
+                    ct: CartridgeType::MBC1,
+                    reason: String::from("given ROM size is too large or incorrect"),
+                }
+            )
+        } else {
+            // not an error, fail this test
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn error_on_unsupported_carttype() {
+        // hopefully someday this test will be unnecessary.
+        let mut rom = vec![0; 4000];
+        rom[0x0100 + 71] = 0xfc; // pocket camera
+
+        let result = Memory::from(rom);
+        if let Err(e) = result {
+            assert_eq!(
+                e,
+                MemoryError::UnsupportedCartType {
+                    ct: CartridgeType::POCKET_CAMERA
+                }
+            );
+        } else {
+            // not an error, fail this test
+            assert!(false);
+        }
+    }
+
+    /*
+       indexing tests
+    */
 }
