@@ -18,6 +18,9 @@ pub struct CartridgeData {
 }
 
 impl CartridgeData {
+    // Other goals:
+    // add rest of MBC1 and MBC2/3/5
+
     pub fn new() -> CartridgeData {
         CartridgeData {
             header: CartridgeHeader::new(), // always addresses $0100 - $014F
@@ -33,9 +36,22 @@ impl CartridgeData {
         let mut cd = Self::new();
         cd.header.read(&data[0x0100..0x014f]);
 
-        // big meaty part of code put in a different function
-        // for readability
+        // big meaty part of code put in a different function for readability
         cd.organize_memory()?;
+
+        for i in 0..cd.rom.len() {
+            cd.rom[i] = data[i];
+        }
+
+        let mut i = cd.rom.len();
+        let mut bank_number = 1;
+        for bank in &mut cd.switchable_banks {
+            for _ in 0..cd.rom.len() {
+                bank[i - (bank_number * cd.rom.len())] = data[i];
+                i += 1;
+            }
+            bank_number += 1;
+        }
 
         Ok(cd)
     }
@@ -105,27 +121,6 @@ impl CartridgeData {
                     }
                 }
             }
-            /*
-            Implement all of these once we've confirmed the above cases work.
-            CartridgeType::MBC1_RAM => {}
-            CartridgeType::MBC1_RAM_BATTERY => {}
-
-            CartridgeType::MBC2 => {}
-            CartridgeType::MBC2_BATTERY => {}
-
-            CartridgeType::MBC3_TIMER_BATTERY => {}
-            CartridgeType::MBC3_TIMER_RAM_BATTERY => {}
-            CartridgeType::MBC3 => {}
-            CartridgeType::MBC3_RAM => {}
-            CartridgeType::MBC3_RAM_BATTERY => {}
-
-            CartridgeType::MBC5 => {}
-            CartridgeType::MBC5_RAM => {}
-            CartridgeType::MBC5_RAM_BATTERY => {}
-            CartridgeType::MBC5_RUMBLE => {}
-            CartridgeType::MBC5_RUMBLE_RAM => {}
-            CartridgeType::MBC5_RUMBLE_RAM_BATTERY => {}
-            */
             _ => {
                 return Err(MemoryError::UnsupportedCartType {
                     ct: self.header.cartridge_type().clone(),
@@ -174,27 +169,6 @@ impl Index<usize> for CartridgeData {
                     return &self.switchable_banks[0][index - 0x4000];
                 }
             }
-            /*
-            Implement all of these once we've confirmed the above cases work.
-            CartridgeType::MBC1_RAM => {}
-            CartridgeType::MBC1_RAM_BATTERY => {}
-
-            CartridgeType::MBC2 => {}
-            CartridgeType::MBC2_BATTERY => {}
-
-            CartridgeType::MBC3_TIMER_BATTERY => {}
-            CartridgeType::MBC3_TIMER_RAM_BATTERY => {}
-            CartridgeType::MBC3 => {}
-            CartridgeType::MBC3_RAM => {}
-            CartridgeType::MBC3_RAM_BATTERY => {}
-
-            CartridgeType::MBC5 => {}
-            CartridgeType::MBC5_RAM => {}
-            CartridgeType::MBC5_RAM_BATTERY => {}
-            CartridgeType::MBC5_RUMBLE => {}
-            CartridgeType::MBC5_RUMBLE_RAM => {}
-            CartridgeType::MBC5_RUMBLE_RAM_BATTERY => {}
-            */
             _ => &0,
         }
     }
@@ -228,28 +202,10 @@ impl IndexMut<usize> for CartridgeData {
                     return &mut self.switchable_banks[0][index - 0x4000];
                 }
             }
-            /*
-            Implement all of these once we've confirmed the above cases work.
-            CartridgeType::MBC1_RAM => {}
-            CartridgeType::MBC1_RAM_BATTERY => {}
-
-            CartridgeType::MBC2 => {}
-            CartridgeType::MBC2_BATTERY => {}
-
-            CartridgeType::MBC3_TIMER_BATTERY => {}
-            CartridgeType::MBC3_TIMER_RAM_BATTERY => {}
-            CartridgeType::MBC3 => {}
-            CartridgeType::MBC3_RAM => {}
-            CartridgeType::MBC3_RAM_BATTERY => {}
-
-            CartridgeType::MBC5 => {}
-            CartridgeType::MBC5_RAM => {}
-            CartridgeType::MBC5_RAM_BATTERY => {}
-            CartridgeType::MBC5_RUMBLE => {}
-            CartridgeType::MBC5_RUMBLE_RAM => {}
-            CartridgeType::MBC5_RUMBLE_RAM_BATTERY => {}
-            */
-            _ => &mut self.rom[0],
+            _ => &mut self.rom[0], // should this be allowed?
         }
     }
 }
+
+#[cfg(test)]
+mod tests {}
