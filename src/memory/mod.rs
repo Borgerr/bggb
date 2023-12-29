@@ -15,6 +15,13 @@ pub struct Memory {
     rom: Vec<u8>,
     switchable_banks: Vec<Vec<u8>>,
     ram: Vec<u8>,
+    vram: Vec<u8>,
+    wram1: Vec<u8>,
+    wram2: Vec<u8>,
+    oam: Vec<u8>,
+    io_registers: Vec<u8>,
+    hram: Vec<u8>,
+    interrupt_enable_reg: u8,
 }
 
 impl Memory {
@@ -27,6 +34,13 @@ impl Memory {
             rom: Vec::new(),
             switchable_banks: Vec::new(),
             ram: Vec::new(),
+            vram: Vec::new(),
+            wram1: Vec::new(),
+            wram2: Vec::new(),
+            oam: Vec::new(),
+            io_registers: Vec::new(),
+            hram: Vec::new(),
+            interrupt_enable_reg: 0,
         }
     }
 
@@ -51,6 +65,15 @@ impl Memory {
     }
 
     fn organize_memory(&mut self) -> Result<(), MemoryError> {
+        // organize memory that's always involved
+        self.vram = vec![0; 0x2000]; // 8KiB of VRAM
+        self.wram1 = vec![0; 0x1000]; // 4KiB of WRAM (bank 1)
+                                      // echo RAM points here
+        self.wram2 = vec![0; 0x1000]; // 4KiB of WRAM (bank 2)
+        self.oam = vec![0; 0x00a0];
+        self.io_registers = vec![0; 0x0080];
+        self.hram = vec![0; 0xffff - 0xff80];
+
         match self.header.cartridge_type() {
             CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
                 if self.header.rom_shift_count() > 0 {
