@@ -30,28 +30,32 @@ impl CartridgeData {
         }
     }
 
-    pub fn read(&mut self, data: Vec<u8>) {}
-
-    pub fn from(data: Vec<u8>) -> Result<CartridgeData, MemoryError> {
-        let mut cd = Self::new();
-        cd.header.read(&data[0x0100..0x014f]);
+    pub fn read(&mut self, data: Vec<u8>) -> Result<(), MemoryError> {
+        self.header.read(&data[0x0100..0x014f]);
 
         // big meaty part of code put in a different function for readability
-        cd.organize_memory()?;
+        self.organize_memory()?;
 
-        for i in 0..cd.rom.len() {
-            cd.rom[i] = data[i];
+        for i in 0..self.rom.len() {
+            self.rom[i] = data[i];
         }
 
-        let mut i = cd.rom.len();
+        let mut i = self.rom.len();
         let mut bank_number = 1;
-        for bank in &mut cd.switchable_banks {
-            for _ in 0..cd.rom.len() {
-                bank[i - (bank_number * cd.rom.len())] = data[i];
+        for bank in &mut self.switchable_banks {
+            for _ in 0..self.rom.len() {
+                bank[i - (bank_number * self.rom.len())] = data[i];
                 i += 1;
             }
             bank_number += 1;
         }
+
+        Ok(())
+    }
+
+    pub fn from(data: Vec<u8>) -> Result<CartridgeData, MemoryError> {
+        let mut cd = Self::new();
+        cd.read(data)?;
 
         Ok(cd)
     }
