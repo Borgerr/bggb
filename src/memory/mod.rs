@@ -519,4 +519,38 @@ mod tests {
     /*
        indexing tests
     */
+
+    macro_rules! set_and_check_index_test {
+        ($name:tt, $x:expr, $loc:expr) => {
+            #[test]
+            fn $name() {
+                let mut rom = vec![0; 4000];
+                rom[0x0100 + 71] = 0x08; // cartridge type includes ram
+                rom[0x0100 + 73] = 0x02; // ram size is 8KiB
+
+                let mut mem = Memory::from(rom).unwrap();
+
+                mem[$loc] = $x;
+                assert_eq!(mem[$loc], $x);
+            }
+        };
+    }
+    set_and_check_index_test!(set_and_check_rombank00, 0x42, 0x0200);
+    set_and_check_index_test!(set_and_check_rombank01, 0x42, 0x4100);
+    set_and_check_index_test!(set_and_check_vram, 0x42, 0x8100);
+    set_and_check_index_test!(set_and_check_ram, 0x42, 0xa100);
+    set_and_check_index_test!(set_and_check_wram1, 0x42, 0xc100);
+    set_and_check_index_test!(set_and_check_wram2, 0x42, 0xd100);
+    set_and_check_index_test!(set_and_check_mirror, 0x42, 0xe100);
+    set_and_check_index_test!(set_and_check_oam, 0x42, 0xfe42);
+    set_and_check_index_test!(set_and_check_ioreg, 0x42, 0xff42);
+    set_and_check_index_test!(set_and_check_hram, 0x42, 0xff90);
+    set_and_check_index_test!(set_and_check_interreg, 0x42, 0xffff);
+
+    #[test]
+    fn out_of_bounds_index_returns_zero() {
+        let mem = Memory::from(vec![0; 4000]).unwrap();
+
+        assert_eq!(mem[0x10000], 0);
+    }
 }
