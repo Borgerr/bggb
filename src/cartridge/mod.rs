@@ -145,11 +145,8 @@ impl Index<usize> for CartridgeData {
     fn index(&self, index: usize) -> &Self::Output {
         match self.header.cartridge_type() {
             CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
-                if (index <= 0x014f) && (index >= 0x0100) {
-                    // header
-                    return &self.header[index];
-                } else if (index >= 0x0000) && (index <= 0x7fff) {
-                    // rom
+                if (index >= 0x0000) && (index <= 0x7fff) {
+                    // rom; includes header
                     return &self.rom[index];
                 } else {
                     // ram
@@ -158,10 +155,7 @@ impl Index<usize> for CartridgeData {
             }
 
             CartridgeType::MBC1 => {
-                if (index <= 0x01f) && (index >= 0x0100) {
-                    // header
-                    return &self.header[index];
-                } else if index <= 0x3fff {
+                if index <= 0x3fff {
                     // rom bank 1
                     return &self.rom[index];
                 } else {
