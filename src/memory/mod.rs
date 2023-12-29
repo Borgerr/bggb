@@ -50,9 +50,7 @@ impl Memory {
         // big meaty part of code put in a different function for readability
         self.organize_memory()?;
 
-        for i in 0..data.len() {
-            self[i] = data[i];
-        }
+        self.put_into_banks(data);
 
         Ok(())
     }
@@ -75,7 +73,7 @@ impl Memory {
         self.hram = vec![0; 0xffff - 0xff80];
 
         match self.header.cartridge_type() {
-            CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
+            CartridgeType::ROM_ONLY => {
                 if self.header.rom_shift_count() > 0 {
                     return Err(MemoryError::CartTypeMismatch {
                         ct: self.header.cartridge_type().clone(),
@@ -83,16 +81,35 @@ impl Memory {
                     });
                 }
 
-                // no MBC, no memory beyond 32 KiB. RAM addressed the same as ROM
+                // no RAM specified
+                if self.header.ram_size() > 0 {
+                    return Err(MemoryError::CartTypeMismatch {
+                        ct: self.header.cartridge_type(),
+                        reason: String::from("header says RAM included with wrong cartridge type"),
+                    });
+                }
+
                 self.rom = vec![0; 0x4000];
                 self.switchable_banks.push(vec![0; 0x4000]);
+            }
+
+            CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
+                if self.header.rom_shift_count() > 0 {
+                    return Err(MemoryError::CartTypeMismatch {
+                        ct: self.header.cartridge_type(),
+                        reason: String::from("given ROM size is too large"),
+                    });
+                }
+                self.rom = vec![0; 0x4000];
+                self.switchable_banks.push(vec![0; 0x4000]);
+                self.ram = vec![0; 0x2000];
             }
 
             CartridgeType::MBC1 => {
                 // no RAM specified
                 if self.header.ram_size() > 0 {
                     return Err(MemoryError::CartTypeMismatch {
-                        ct: self.header.cartridge_type().clone(),
+                        ct: self.header.cartridge_type(),
                         reason: String::from("header says RAM included with wrong cartridge type"),
                     });
                 }
@@ -133,7 +150,7 @@ impl Memory {
                     }
                     _ => {
                         return Err(MemoryError::CartTypeMismatch {
-                            ct: self.header.cartridge_type().clone(),
+                            ct: self.header.cartridge_type(),
                             reason: String::from("given ROM size is too large or incorrect"),
                         })
                     }
@@ -141,7 +158,7 @@ impl Memory {
             }
             _ => {
                 return Err(MemoryError::UnsupportedCartType {
-                    ct: self.header.cartridge_type().clone(),
+                    ct: self.header.cartridge_type(),
                 })
             }
         }
@@ -150,67 +167,112 @@ impl Memory {
     }
 
     fn add_banks_for_mbc1(&mut self, bank_count: u16) {
-        self.rom = vec![0; 0x3fff]; // covers first bank
+        self.rom = vec![0; 0x4000]; // covers first bank
         for _ in 0..bank_count - 1 {
-            self.switchable_banks.push(vec![0; 0x3fff]);
+            self.switchable_banks.push(vec![0; 0x4000]);
+        }
+    }
+
+    fn put_into_banks(&mut self, data: Vec<u8>) {
+        // write in bank 00 first
+        let mut i = 0;
+        while (i < self.rom.len()) && (i < data.len()) {
+            self.rom[i] = data[i];
+            i += 1;
+        }
+        // write in rest of memory banks
+        while i < data.len() {
+            for bank in &mut self.switchable_banks {
+                for j in 0..bank.len() {
+                    bank[j] = data[i];
+                    i += 1;
+                }
+            }
         }
     }
 }
+
+// might consider adding different functionality depending on MBC
+// for indexing implementations
 
 impl Index<usize> for Memory {
     type Output = u8;
 
     fn index(&self, index: usize) -> &Self::Output {
-        match self.header.cartridge_type() {
-            CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
-                if (index >= 0x0000) && (index <= 0x7fff) {
-                    // rom; includes header
-                    return &self.rom[index];
-                } else {
-                    // ram
-                    return &self.ram[index - 0x0a000];
-                }
-            }
-
-            CartridgeType::MBC1 => {
-                if index <= 0x3fff {
-                    // rom bank 1
-                    return &self.rom[index];
-                } else {
-                    // switchable rom bank
-                    return &self.switchable_banks[0][index - 0x4000];
-                }
-            }
-            _ => &0,
+        if index <= 0x3fff {
+            // rom bank 00, includes header
+            return &self.rom[index];
+        } else if (index >= 0x4000) && (index <= 0x7fff) {
+            // rom bank 01
+            return &self.switchable_banks[0][index - 0x4000];
+        } else if (index >= 0x8000) && (index <= 0x9fff) {
+            // VRAM
+            return &self.vram[index - 0x8000];
+        } else if (index >= 0xa000) && (index <= 0xbfff) {
+            // external ram if any
+            return &self.ram[index - 0xa000];
+        } else if (index >= 0xc000) && (index <= 0xcfff) {
+            // WRAM bank 1
+            return &self.wram1[index - 0xc000];
+        } else if (index >= 0xd000) && (index <= 0xdfff) {
+            // WRAM bank 2
+            return &self.wram2[index - 0xd000];
+        } else if (index >= 0xe000) && (index <= 0xfdff) {
+            // mirror of C000~DDFF
+            return &self[(index - 0xe000) + 0xc000];
+        } else if (index >= 0xfe00) && (index <= 0xfe9f) {
+            // OAM
+            return &self.oam[index - 0xfe00];
+        } else if (index >= 0xff00) && (index <= 0xff7f) {
+            // I/O registers
+            return &self.io_registers[index - 0xff00];
+        } else if (index >= 0xff80) && (index <= 0xfffe) {
+            // HRAM
+            return &self.hram[index - 0xff80];
+        } else if index == 0xffff {
+            // interrupt enable register
+            return &self.interrupt_enable_reg;
+        } else {
+            return &0;
         }
     }
 }
 
 impl IndexMut<usize> for Memory {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match self.header.cartridge_type() {
-            CartridgeType::ROM_ONLY | CartridgeType::ROM_RAM | CartridgeType::ROM_RAM_BATTERY => {
-                if index <= 0x3fff {
-                    // rom, includes header
-                    return &mut self.rom[index];
-                } else if (index > 0x3fff) && (index <= 0x7fff) {
-                    return &mut self.switchable_banks[0][index - 0x3fff];
-                } else {
-                    // ram
-                    return &mut self.ram[index - 0x0a000];
-                }
-            }
-
-            CartridgeType::MBC1 => {
-                if index <= 0x3fff {
-                    // rom bank 1, includes header
-                    return &mut self.rom[index];
-                } else {
-                    // switchable rom bank
-                    return &mut self.switchable_banks[0][index - 0x4000];
-                }
-            }
-            _ => &mut self.rom[0], // should this be allowed?
+        if index <= 0x3fff {
+            // rom bank 00, includes header
+            return &mut self.rom[index];
+        } else if (index >= 0x4000) && (index <= 0x7fff) {
+            // rom bank 01
+            return &mut self.switchable_banks[0][index - 0x4000];
+        } else if (index >= 0x8000) && (index <= 0x9fff) {
+            // VRAM
+            return &mut self.vram[index - 0x8000];
+        } else if (index >= 0xa000) && (index <= 0xbfff) {
+            // external ram if any
+            return &mut self.ram[index - 0xa000];
+        } else if (index >= 0xc000) && (index <= 0xcfff) {
+            // WRAM bank 1
+            return &mut self.wram1[index - 0xc000];
+        } else if (index >= 0xd000) && (index <= 0xdfff) {
+            // WRAM bank 2
+            return &mut self.wram2[index - 0xd000];
+        } else if (index >= 0xe000) && (index <= 0xfdff) {
+            // mirror of C000~DDFF
+            return &mut self[(index - 0xe000) + 0xc000];
+        } else if (index >= 0xfe00) && (index <= 0xfe9f) {
+            // OAM
+            return &mut self.oam[index - 0xfe00];
+        } else if (index >= 0xff00) && (index <= 0xff7f) {
+            // I/O registers
+            return &mut self.io_registers[index - 0xff00];
+        } else if (index >= 0xff80) && (index <= 0xfffe) {
+            // HRAM
+            return &mut self.hram[index - 0xff80];
+        } else {
+            // interrupt enable register
+            return &mut self.interrupt_enable_reg;
         }
     }
 }
@@ -238,17 +300,17 @@ mod tests {
     }
     #[test]
     fn reading_16kib_zerovec_valid() {
-        let result = Memory::from(vec![0; 0x3fff]);
+        let result = Memory::from(vec![0; 0x4000]);
         assert!(if let Ok(_) = result { true } else { false });
     }
     #[test]
     fn reading_32kib_zerovec_valid() {
-        let result = Memory::from(vec![0; 0x7fff]);
+        let result = Memory::from(vec![0; 0x8000]);
         assert!(if let Ok(_) = result { true } else { false });
     }
     #[test]
     fn reading_zerovec_romram_valid() {
-        let mut rom = vec![0; 0xbfff];
+        let mut rom = vec![0; 0x8000];
         rom[0x0100 + 71] = 0x08; // cartridge type includes ram
         rom[0x0100 + 73] = 0x02; // ram size is 8KiB
 
