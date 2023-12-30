@@ -1,5 +1,24 @@
-mod memory;
+use std::fs::File;
+use std::io::{stdin, Read};
 
-fn main() {
-    println!("Hello, world!");
+mod memory;
+use memory::Memory;
+
+type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
+
+fn main() -> Result<()> {
+    println!("enter file to read from");
+    let mut filename = String::new();
+    stdin().read_line(&mut filename)?;
+
+    println!("(-) reading from {}...", filename.trim());
+
+    let mut f = File::open(filename.trim().to_string())?;
+    let mut rom_data = Vec::new();
+    // read the whole file
+    f.read_to_end(&mut rom_data)?;
+
+    let mem = Memory::from(rom_data).unwrap();
+
+    Ok(())
 }
