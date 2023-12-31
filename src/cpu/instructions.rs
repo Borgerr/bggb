@@ -1,10 +1,12 @@
+use std::os::linux::raw;
+
 pub enum Register {
     AF,
     BC,
     DE,
     HL,
     SP,
-    
+
     A,
     B,
     C,
@@ -12,16 +14,59 @@ pub enum Register {
     E,
     H,
     L,
-    
+
     HLplus,
     HLminus,
 }
-
+impl Register {
+    pub fn r_lookup(val: u8) -> Register {
+        // val is assumed to be less than 8
+        match val {
+            0 => Register::B,
+            1 => Register::C,
+            2 => Register::D,
+            3 => Register::E,
+            4 => Register::H,
+            5 => Register::L,
+            6 => Register::HL,
+            7 | _ => Register::A,
+        }
+    }
+    pub fn rp_lookup(val: u8) -> Register {
+        // val is assumed to be less than 4
+        match val {
+            0 => Register::BC,
+            1 => Register::DE,
+            2 => Register::HL,
+            3 | _ => Register::SP,
+        }
+    }
+    pub fn rp2_lookup(val: u8) -> Register {
+        // val is assumed to be less than 4
+        match val {
+            0 => Register::BC,
+            1 => Register::DE,
+            2 => Register::HL,
+            3 | _ => Register::AF,
+        }
+    }
+}
 pub enum Flag {
     NZ,
     Z,
     NC,
     C,
+}
+impl Flag {
+    pub fn cc_lookup(val: u8) -> Flag {
+        // val is assumed to be less than 4
+        match val {
+            0 => Flag::NZ,
+            1 => Flag::Z,
+            2 => Flag::NC,
+            3 | _ => Flag::C,
+        }
+    }
 }
 
 pub enum Instruction {
@@ -30,12 +75,22 @@ pub enum Instruction {
     HALT,
     ILLEGAL,
 
-    Load16 {r: Register, nn: u16},
-    LoadReg {r1: Register, r2: Register},
-    Load8 {r: Register, n: u8},
+    Load16 { r: Register, nn: u16 },
+    Load8 { r: Register, n: u8 },
+    LoadFF00Plus { r: Register, n: u8 },
+    LoadReg { r1: Register, r2: Register },
 
-    Jump{nn: u16},
-    JumpConditional{f: Flag, nn: u16},
+    Jump { nn: u16 },
+    JumpConditional { f: Flag, nn: u16 },
+
+    RLC { r: Register },
+    RRC { r: Register },
+    RL { r: Register },
+    RR { r: Register },
+    SLA { r: Register },
+    SRA { r: Register },
+    SWAP { r: Register },
+    SRL { r: Register },
 }
 
 impl Instruction {
@@ -84,34 +139,37 @@ impl Instruction {
 
         // check if first byte is a prefix byte
         if Self::first_byte(bytes) == 0xcb {
+            let y = Self::opcode_y(Self::second_byte(bytes));
+            let z = Self::opcode_z(Self::second_byte(bytes));
+
             match Self::opcode_x(Self::second_byte(bytes)) {
                 0 => {
                     // rot[y] r[z]
-                    match Self::opcode_y(Self::second_byte(bytes)) {
-                        0 => {
-                            // RLC
-                        }
-                        1 => {
-                            // RRC
-                        }
-                        2 => {
-                            // RL
-                        }
-                        3 => {
-                            // RR
-                        }
-                        4 => {
-                            // SLA
-                        }
-                        5 => {
-                            // SRA
-                        }
-                        6 => {
-                            // SWAP
-                        }
-                        7 | _ => {
-                            // SRL
-                        }
+                    match y {
+                        0 => Instruction::RLC {
+                            r: Register::r_lookup(z),
+                        },
+                        1 => Instruction::RRC {
+                            r: Register::r_lookup(z),
+                        },
+                        2 => Instruction::RL {
+                            r: Register::r_lookup(z),
+                        },
+                        3 => Instruction::RR {
+                            r: Register::r_lookup(z),
+                        },
+                        4 => Instruction::SLA {
+                            r: Register::r_lookup(z),
+                        },
+                        5 => Instruction::SRA {
+                            r: Register::r_lookup(z),
+                        },
+                        6 => Instruction::SWAP {
+                            r: Register::r_lookup(z),
+                        },
+                        7 | _ => Instruction::SRL {
+                            r: Register::r_lookup(z),
+                        },
                     }
                 }
                 1 => {
@@ -123,316 +181,318 @@ impl Instruction {
                 3 | _ => {
                     // SET y, r[z]
                 }
-            }
+            };
+            Instruction::NOP
         } else {
             // first byte is not a prefix byte
             match Self::opcode_x(Self::first_byte(bytes)) {
-                0 => match Self::opcode_z(Self::first_byte(bytes)) {
-                    0 => {
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 => {
-                                Instruction::NOP
-                            }
-                            1 => {
-                                // LD (nn), SP
-                                Instruction::Load16{r: Register::SP, nn: Self::second_and_third_bytes(bytes)}
-                            }
-                            2 => {
-                                Instruction::STOP
-                            }
-                            3 => {
-                                // JR d
-                            }
-                            4 | 5 | 6 | 7 | _ => {
-                                // JR cc[y-4], d
-                            }
-                        }
-                    }
-                    1 => {
-                        if Self::opcode_q(Self::first_byte(bytes)) {
-                            // ADD HL, rp[p]
-                        } else {
-                            // LD rp[p], nn
-                            match Self::opcode_p(Self::first_byte(bytes)) {
-                                0 => Instruction::Load16{r: Register::BC, nn: Self::second_and_third_bytes(bytes)},
-                                1 => Instruction::Load16{r: Register::DE, nn: Self::second_and_third_bytes(bytes)},
-                                2 => Instruction::Load16{r: Register::HL, nn: Self::second_and_third_bytes(bytes)},
-                                3 | _ => Instruction::Load16{r: Register::SP, nn: Self::second_and_third_bytes(bytes)},
-                            }
-                        }
-                    }
-                    2 => {
-                        if Self::opcode_q(Self::first_byte(bytes)) {
-                            match Self::opcode_p(Self::first_byte(bytes)) {
-                                0 => {
-                                    // LD A, (BC)
-                                    Instruction::LoadReg{r1: Register::A, r2: Register::BC}
-                                }
-                                1 => {
-                                    // LD A, (DE)
-                                    Instruction::LoadReg{r1: Register::A, r2: Register::DE}
-                                }
-                                2 => {
-                                    // LD A, (HL+)
-                                    Instruction::LoadReg{r1: Register::A, r2: Register::HLplus}
-                                }
-                                3 | _ => {
-                                    // LD A, (HL-)
-                                    Instruction::LoadReg{r1: Register::A, r2: Register::HLminus}
-                                }
-                            }
-                        } else {
-                            match Self::opcode_p(Self::first_byte(bytes)) {
-                                0 => {
-                                    // LD (BC), A
-                                    Instruction::LoadReg{r1: Register::BC, r2: Register::A}
-                                }
-                                1 => {
-                                    // LD (DE), A
-                                    Instruction::LoadReg{r1: Register::DE, r2: Register::A}
-                                }
-                                2 => {
-                                    // LD (HL+), A
-                                    Instruction::LoadReg{r1: Register::HLplus, r2: Register::A}
-                                }
-                                3 | _ => {
-                                    // LD (HL-), A
-                                    Instruction::LoadReg{r1: Register::HLminus, r2: Register::A}
-                                }
-                            }
-                        }
-                    }
-                    3 => {
-                        if Self::opcode_q(Self::first_byte(bytes)) {
-                            // DEC rp[p]
-                        } else {
-                            // INC rp[p]
-                        }
-                    }
-                    4 => {
-                        // INC r[y]
-                    }
-                    5 => {
-                        // DEC r[y]
-                    }
-                    6 => {
-                        // LD r[y], n
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 => Instruction::Load8{r: Register::B, n: Self::second_byte(bytes)},
-                            1 => Instruction::Load8{r: Register::C, n: Self::second_byte(bytes)},
-                            2 => Instruction::Load8{r: Register::D, n: Self::second_byte(bytes)},
-                            3 => Instruction::Load8{r: Register::E, n: Self::second_byte(bytes)},
-                            4 => Instruction::Load8{r: Register::H, n: Self::second_byte(bytes)},
-                            5 => Instruction::Load8{r: Register::L, n: Self::second_byte(bytes)},
-                            6 => Instruction::Load8{r: Register::HL, n: Self::second_byte(bytes)},
-                            7 | _ => Instruction::Load8{r: Register::A, n: Self::second_byte(bytes)},
-                        }
-                    }
-                    7 | _ => {
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 => {
-                                // RLCA
-                            }
-                            1 => {
-                                // RRCA
-                            }
-                            2 => {
-                                // RLA
-                            }
-                            3 => {
-                                // RRA
-                            }
-                            4 => {
-                                // DAA
-                            }
-                            5 => {
-                                // CPL
-                            }
-                            6 => {
-                                // SCF
-                            }
-                            7 | _ => {
-                                // CCF
-                            }
-                        }
-                    }
-                },
-                1 => {
-                    if (Self::opcode_z(Self::first_byte(bytes)) == 6)
-                        && (Self::opcode_y(Self::first_byte(bytes)) == 6)
-                    {
-                        Instruction::HALT
-                    } else {
-                        // LD r[y], r[z]
-                    }
-                }
-                2 => {
-                    // alu[y] r[z]
-                    match Self::opcode_y(Self::first_byte(bytes)) {
-                        0 => {
-                            // ADD
-                        }
-                        1 => {
-                            // ADC
-                        }
-                        2 => {
-                            // SUB
-                        }
-                        3 => {
-                            // SBC
-                        }
-                        4 => {
-                            // AND
-                        }
-                        5 => {
-                            // XOR
-                        }
-                        6 => {
-                            // OR
-                        }
-                        7 | _ => {
-                            // CP
-                        }
-                    }
-                }
-                3 | _ => match Self::opcode_z(Self::first_byte(bytes)) {
-                    0 => match Self::opcode_y(Self::first_byte(bytes)) {
-                        0 | 1 | 2 | 3 => {
-                            // RET cc[y]
-                        }
-                        4 => {
-                            // LD (0xFF00 + n), A
-                        }
-                        5 => {
-                            // ADD SP, d
-                        }
-                        6 => {
-                            // LD A, (0xFF00 + n)
-                        }
-                        7 | _ => {
-                            // LD HL, SP+ d
-                        }
-                    },
-                    1 => {
-                        if Self::opcode_q(Self::first_byte(bytes)) {
-                            match Self::opcode_p(Self::first_byte(bytes)) {
-                                0 => {
-                                    // RET
-                                }
-                                1 => {
-                                    // RETI
-                                }
-                                2 => {
-                                    // JP HL
-                                }
-                                3 | _ => {
-                                    // LD SP, HL
-                                }
-                            }
-                        } else {
-                            // POP rp2[p]
-                        }
-                    }
-                    2 => {
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            // JP cc[y], nn for 0-3
-                            0 => Instruction::JumpConditional { f: Flag::NZ, nn: Self::second_and_third_bytes(bytes) },
-                            1 => Instruction::JumpConditional { f: Flag::Z, nn: Self::second_and_third_bytes(bytes) },
-                            2 => Instruction::JumpConditional { f: Flag::NC, nn: Self::second_and_third_bytes(bytes) },
-                            3 => Instruction::JumpConditional { f: Flag::C, nn: Self::second_and_third_bytes(bytes) },
-                            4 => {
-                                // LD (0xFF00+C), A
-                            }
-                            5 => {
-                                // LD (nn), A
-                            }
-                            6 => {
-                                // LD A, (0xFF00+C)
-                            }
-                            7 | _ => {
-                                // LD A, (nn)
-                            }
-                        }
-                    }
-                    3 => {
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 => {
-                                // JP nn
-                                Instruction::Jump{nn: Self::second_and_third_bytes(bytes)}
-                            } /*
-                            1 => {
-                            // CB prefix, never encountered.
-                            }
-                             */
-                            2 | 3 | 4 | 5 => {
-                                Instruction::ILLEGAL
-                            }
-                            6 => {
-                                // DI
-                            }
-                            7 | _ => {
-                                // EI
-                            }
-                        }
-                    }
-                    4 => {
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 | 1 | 2 | 3 => {
-                                // CALL cc[y], nn
-                            }
-                            4 | 5 | 6 | 7 | _ => {
-                                Instruction::ILLEGAL
-                            }
-                        }
-                    }
-                    5 => {
-                        if Self::opcode_q(Self::first_byte(bytes)) {
-                            match Self::opcode_p(Self::first_byte(bytes)) {
-                                0 => {
-                                    // CALL nn
-                                }
-                                1 | 2 | 3 | _ => {
-                                    Instruction::ILLEGAL
-                                }
-                            }
-                        } else {
-                            // call with condition y < 4
-                        }
-                    }
-                    6 => {
-                        // alu[y] n
-                        match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 => {
-                                // ADD
-                            }
-                            1 => {
-                                // ADC
-                            }
-                            2 => {
-                                // SUB
-                            }
-                            3 => {
-                                // SBC
-                            }
-                            4 => {
-                                // AND
-                            }
-                            5 => {
-                                // XOR
-                            }
-                            6 => {
-                                // OR
-                            }
-                            7 | _ => {
-                                // CP
-                            }
-                        }
-                    }
-                    7 | _ => {
-                        // RST y*8
-                    }
-                },
+                0 => Self::prefixless_x0(bytes),
+                1 => Self::prefixless_x1(bytes),
+                2 => Self::prefixless_x2(bytes),
+                3 | _ => Self::prefixless_x3(bytes),
             }
         }
+    }
+
+    fn prefixless_x0(bytes: u32) -> Instruction {
+        let y = Self::opcode_y(Self::first_byte(bytes));
+        let q = Self::opcode_q(Self::first_byte(bytes));
+        let p = Self::opcode_p(Self::first_byte(bytes));
+
+        match Self::opcode_z(Self::first_byte(bytes)) {
+            0 => {
+                match y {
+                    0 => {
+                        // NOP
+                    }
+                    1 => {
+                        // LD (nn), SP
+                    }
+                    2 => {
+                        // STOP
+                    }
+                    3 => {
+                        // JR d
+                    }
+                    4 | 5 | 6 | 7 | _ => {
+                        // JR cc[y-4], d
+                    }
+                }
+            }
+            1 => {
+                if q {
+                    // ADD HL, rp[p]
+                } else {
+                    // LD rp[p], nn
+                }
+            }
+            2 => {
+                if q {
+                    match p {
+                        0 => {
+                            // LD A, (BC)
+                        }
+                        1 => {
+                            // LD A, (DE)
+                        }
+                        2 => {
+                            // LD A, (HL+)
+                        }
+                        3 | _ => {
+                            // LD A, (HL-)
+                        }
+                    }
+                } else {
+                    match p {
+                        0 => {
+                            // LD (BC), A
+                        }
+                        1 => {
+                            // LD (DE), A
+                        }
+                        2 => {
+                            // LD (HL+), A
+                        }
+                        3 | _ => {
+                            // LD (HL-), A
+                        }
+                    }
+                }
+            }
+            3 => {
+                if q {
+                    // DEC rp[p]
+                } else {
+                    // INC rp[p]
+                }
+            }
+            4 => {
+                // INC r[y]
+            }
+            5 => {
+                // DEC r[y]
+            }
+            6 => {
+                // LD r[y], n
+            }
+            7 | _ => {
+                match y {
+                    0 => {
+                        // RLCA
+                    }
+                    1 => {
+                        // RRCA
+                    }
+                    2 => {
+                        // RLA
+                    }
+                    3 => {
+                        // RRA
+                    }
+                    4 => {
+                        // DAA
+                    }
+                    5 => {
+                        // CPL
+                    }
+                    6 => {
+                        // SCF
+                    }
+                    7 | _ => {
+                        // CCF
+                    }
+                }
+            }
+        };
+        Instruction::NOP
+    }
+
+    fn prefixless_x1(bytes: u32) -> Instruction {
+        let y = Self::opcode_y(Self::first_byte(bytes));
+        let z = Self::opcode_z(Self::first_byte(bytes));
+
+        if (z == 6) && (y == 6) {
+            Instruction::HALT
+        } else {
+            // LD r[y], r[z]
+            Instruction::LoadReg {
+                r1: Register::r_lookup(y),
+                r2: Register::r_lookup(z),
+            }
+        }
+    }
+
+    fn prefixless_x2(bytes: u32) -> Instruction {
+        match Self::opcode_y(Self::first_byte(bytes)) {
+            0 => {
+                // ADD
+            }
+            1 => {
+                // ADC
+            }
+            2 => {
+                // SUB
+            }
+            3 => {
+                // SBC
+            }
+            4 => {
+                // AND
+            }
+            5 => {
+                // XOR
+            }
+            6 => {
+                // OR
+            }
+            7 | _ => {
+                // CP
+            }
+        };
+
+        Instruction::NOP
+    }
+
+    fn prefixless_x3(bytes: u32) -> Instruction {
+        let y = Self::opcode_y(Self::first_byte(bytes));
+        let q = Self::opcode_q(Self::first_byte(bytes));
+        let p = Self::opcode_p(Self::first_byte(bytes));
+
+        match Self::opcode_z(Self::first_byte(bytes)) {
+            0 => match y {
+                0 | 1 | 2 | 3 => {
+                    // RET cc[y]
+                }
+                4 => {
+                    // LD (0xFF00 + n), A
+                }
+                5 => {
+                    // ADD SP, d
+                }
+                6 => {
+                    // LD A, (0xFF00 + n)
+                }
+                7 | _ => {
+                    // LD HL, SP+ d
+                }
+            },
+            1 => {
+                if q {
+                    match p {
+                        0 => {
+                            // RET
+                        }
+                        1 => {
+                            // RETI
+                        }
+                        2 => {
+                            // JP HL
+                        }
+                        3 | _ => {
+                            // LD SP, HL
+                        }
+                    }
+                } else {
+                    // POP rp2[p]
+                }
+            }
+            2 => {
+                match y {
+                    0 | 1 | 2 | 3 => {
+                        // JP cc[y], nn
+                    }
+                    4 => {
+                        // LD (0xFF00+C), A
+                    }
+                    5 => {
+                        // LD (nn), A
+                    }
+                    6 => {
+                        // LD A, (0xFF00+C)
+                    }
+                    7 | _ => {
+                        // LD A, (nn)
+                    }
+                }
+            }
+            3 => {
+                match y {
+                    0 => {
+                        // JP nn
+                    } /*
+                    1 => {
+                    // CB prefix, never encountered.
+                    }
+                     */
+                    2 | 3 | 4 | 5 => {
+                        // ILLEGAL OPCODE
+                    }
+                    6 => {
+                        // DI
+                    }
+                    7 | _ => {
+                        // EI
+                    }
+                }
+            }
+            4 => {
+                match y {
+                    0 | 1 | 2 | 3 => {
+                        // CALL cc[y], nn
+                    }
+                    4 | 5 | 6 | 7 | _ => {
+                        // ILLEGAL OPCODE
+                    }
+                }
+            }
+            5 => {
+                if q {
+                    match p {
+                        0 => {
+                            // CALL nn
+                        }
+                        1 | 2 | 3 | _ => {
+                            // ILLEGAL OPCODE
+                        }
+                    }
+                } else {
+                    // CALL cc[y]
+                }
+            }
+            6 => {
+                // alu[y] n
+                match y {
+                    0 => {
+                        // ADD
+                    }
+                    1 => {
+                        // ADC
+                    }
+                    2 => {
+                        // SUB
+                    }
+                    3 => {
+                        // SBC
+                    }
+                    4 => {
+                        // AND
+                    }
+                    5 => {
+                        // XOR
+                    }
+                    6 => {
+                        // OR
+                    }
+                    7 | _ => {
+                        // CP
+                    }
+                }
+            }
+            7 | _ => {
+                // RST y*8
+            }
+        };
+
+        Instruction::NOP
     }
 }
