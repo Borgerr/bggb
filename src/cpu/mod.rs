@@ -38,8 +38,9 @@ impl CPU {
             // possibly change to be more general for other fetches
             Err(CpuError::FetchError { pc: self.pc })
         } else {
+            let result = Ok(mem[self.pc as usize]);
             self.pc += 1;
-            Ok(mem[self.pc as usize])
+            result
         }
     }
     fn fetch_pc_u32(&mut self, mem: &Memory) -> Result<u32, CpuError> {
