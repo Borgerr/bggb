@@ -41,266 +41,329 @@ impl Instruction {
         // there shouldn't be any other possible value beyond those, but this is all u8
 
         // check if first byte is a prefix byte
-        match Self::first_byte(bytes) {
-            0xcb => {
-                match Self::opcode_x(Self::second_byte(bytes)) {
-                    0 => {
-                        // rot[y] r[z]
-                    }
-                    1 => {
-                        // BIT y, r[z]
-                    }
-                    2 => {
-                        // RES y, r[z]
-                    }
-                    3 | _ => {
-                        // SET y, r[z]
-                    }
-                }
-            }
-            0xdd => {
-                if Self::second_byte(bytes) == 0xcb {
-                } else {
-                }
-            }
-            0xed => {}
-            0xfd => {
-                if Self::second_byte(bytes) == 0xcb {
-                } else {
-                }
-            }
-            _ => {
-                // first byte is not a prefix byte
-                match Self::opcode_x(Self::first_byte(bytes)) {
-                    0 => match Self::opcode_z(Self::first_byte(bytes)) {
+        if Self::first_byte(bytes) == 0xcb {
+            match Self::opcode_x(Self::second_byte(bytes)) {
+                0 => {
+                    // rot[y] r[z]
+                    match Self::opcode_y(Self::second_byte(bytes)) {
                         0 => {
-                            match Self::opcode_y(Self::first_byte(bytes)) {
-                                0 => {
-                                    // NOP
-                                }
-                                1 => {
-                                    // LD (nn), SP
-                                }
-                                2 => {
-                                    // STOP
-                                }
-                                3 => {
-                                    // JR d
-                                }
-                                4 | 5 | 6 | 7 | _ => {
-                                    // JR cc[y-4], d
-                                }
-                            }
+                            // RLC
                         }
                         1 => {
-                            if Self::opcode_q(Self::first_byte(bytes)) {
-                                // ADD HL, rp[p]
-                            } else {
-                                // LD rp[p], nn
-                            }
+                            // RRC
                         }
                         2 => {
-                            if Self::opcode_q(Self::first_byte(bytes)) {
-                                match Self::opcode_p(Self::first_byte(bytes)) {
-                                    0 => {
-                                        // LD A, (BC)
-                                    }
-                                    1 => {
-                                        // LD A, (DE)
-                                    }
-                                    2 => {
-                                        // LD A, (HL+)
-                                    }
-                                    3 | _ => {
-                                        // LD A, (HL-)
-                                    }
-                                }
-                            } else {
-                                match Self::opcode_p(Self::first_byte(bytes)) {
-                                    0 => {
-                                        // LD (BC), A
-                                    }
-                                    1 => {
-                                        // LD (DE), A
-                                    }
-                                    2 => {
-                                        // LD (HL+), A
-                                    }
-                                    3 | _ => {
-                                        // LD (HL-), A
-                                    }
-                                }
-                            }
+                            // RL
                         }
                         3 => {
-                            if Self::opcode_q(Self::first_byte(bytes)) {
-                                // DEC rp[p]
-                            } else {
-                                // INC rp[p]
-                            }
+                            // RR
                         }
                         4 => {
-                            // INC r[y]
+                            // SLA
                         }
                         5 => {
-                            // DEC r[y]
+                            // SRA
                         }
                         6 => {
-                            // LD r[y], n
+                            // SWAP
                         }
                         7 | _ => {
-                            match Self::opcode_y(Self::first_byte(bytes)) {
-                                0 => {
-                                    // RLCA
-                                }
-                                1 => {
-                                    // RRCA
-                                }
-                                2 => {
-                                    // RLA
-                                }
-                                3 => {
-                                    // RRA
-                                }
-                                4 => {
-                                    // DAA
-                                }
-                                5 => {
-                                    // CPL
-                                }
-                                6 => {
-                                    // SCF
-                                }
-                                7 | _ => {
-                                    // CCF
-                                }
+                            // SRL
+                        }
+                    }
+                }
+                1 => {
+                    // BIT y, r[z]
+                }
+                2 => {
+                    // RES y, r[z]
+                }
+                3 | _ => {
+                    // SET y, r[z]
+                }
+            }
+        } else {
+            // first byte is not a prefix byte
+            match Self::opcode_x(Self::first_byte(bytes)) {
+                0 => match Self::opcode_z(Self::first_byte(bytes)) {
+                    0 => {
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 => {
+                                // NOP
+                            }
+                            1 => {
+                                // LD (nn), SP
+                            }
+                            2 => {
+                                // STOP
+                            }
+                            3 => {
+                                // JR d
+                            }
+                            4 | 5 | 6 | 7 | _ => {
+                                // JR cc[y-4], d
                             }
                         }
-                    },
+                    }
                     1 => {
-                        if (Self::opcode_z(Self::first_byte(bytes)) == 6)
-                            && (Self::opcode_y(Self::first_byte(bytes)) == 6)
-                        {
-                            // HALT
+                        if Self::opcode_q(Self::first_byte(bytes)) {
+                            // ADD HL, rp[p]
                         } else {
-                            // LD r[y], r[z]
+                            // LD rp[p], nn
                         }
                     }
                     2 => {
-                        // alu[y] r[z]
+                        if Self::opcode_q(Self::first_byte(bytes)) {
+                            match Self::opcode_p(Self::first_byte(bytes)) {
+                                0 => {
+                                    // LD A, (BC)
+                                }
+                                1 => {
+                                    // LD A, (DE)
+                                }
+                                2 => {
+                                    // LD A, (HL+)
+                                }
+                                3 | _ => {
+                                    // LD A, (HL-)
+                                }
+                            }
+                        } else {
+                            match Self::opcode_p(Self::first_byte(bytes)) {
+                                0 => {
+                                    // LD (BC), A
+                                }
+                                1 => {
+                                    // LD (DE), A
+                                }
+                                2 => {
+                                    // LD (HL+), A
+                                }
+                                3 | _ => {
+                                    // LD (HL-), A
+                                }
+                            }
+                        }
                     }
-                    3 | _ => match Self::opcode_z(Self::first_byte(bytes)) {
-                        0 => match Self::opcode_y(Self::first_byte(bytes)) {
-                            0 | 1 | 2 | 3 => {
-                                // RET cc[y]
+                    3 => {
+                        if Self::opcode_q(Self::first_byte(bytes)) {
+                            // DEC rp[p]
+                        } else {
+                            // INC rp[p]
+                        }
+                    }
+                    4 => {
+                        // INC r[y]
+                    }
+                    5 => {
+                        // DEC r[y]
+                    }
+                    6 => {
+                        // LD r[y], n
+                    }
+                    7 | _ => {
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 => {
+                                // RLCA
+                            }
+                            1 => {
+                                // RRCA
+                            }
+                            2 => {
+                                // RLA
+                            }
+                            3 => {
+                                // RRA
                             }
                             4 => {
-                                // LD (0xFF00 + n), A
+                                // DAA
                             }
                             5 => {
-                                // ADD SP, d
+                                // CPL
                             }
                             6 => {
-                                // LD A, (0xFF00 + n)
+                                // SCF
                             }
                             7 | _ => {
-                                // LD HL, SP+ d
+                                // CCF
                             }
-                        },
+                        }
+                    }
+                },
+                1 => {
+                    if (Self::opcode_z(Self::first_byte(bytes)) == 6)
+                        && (Self::opcode_y(Self::first_byte(bytes)) == 6)
+                    {
+                        // HALT
+                    } else {
+                        // LD r[y], r[z]
+                    }
+                }
+                2 => {
+                    // alu[y] r[z]
+                    match Self::opcode_y(Self::first_byte(bytes)) {
+                        0 => {
+                            // ADD
+                        }
                         1 => {
-                            if Self::opcode_q(Self::first_byte(bytes)) {
-                                match Self::opcode_p(Self::first_byte(bytes)) {
-                                    0 => {
-                                        // RET
-                                    }
-                                    1 => {
-                                        // JP HL
-                                    }
-                                    2 => {
-                                        // RETI
-                                    }
-                                    3 | _ => {
-                                        // LD SP, HL
-                                    }
-                                }
-                            } else {
-                                // POP rp2[p]
-                            }
+                            // ADC
                         }
                         2 => {
-                            match Self::opcode_y(Self::first_byte(bytes)) {
-                                0 | 1 | 2 | 3 => {
-                                    // JP cc[y], nn
-                                }
-                                4 => {
-                                    // LD (0xFF00+C), A
-                                }
-                                5 => {
-                                    // LD (nn), A
-                                }
-                                6 => {
-                                    // LD A, (0xFF00+C)
-                                }
-                                7 | _ => {
-                                    // LD A, (nn)
-                                }
-                            }
+                            // SUB
                         }
                         3 => {
-                            match Self::opcode_y(Self::first_byte(bytes)) {
-                                0 => {
-                                    // JP nn
-                                } /*
-                                1 => {
-                                // CB prefix, never encountered.
-                                }
-                                 */
-                                2 | 3 | 4 | 5 => {
-                                    // removed from document? investigate
-                                    todo!()
-                                }
-                                6 => {
-                                    // DI
-                                }
-                                7 | _ => {
-                                    // EI
-                                }
-                            }
+                            // SBC
                         }
                         4 => {
-                            match Self::opcode_y(Self::first_byte(bytes)) {
-                                0 | 1 | 2 | 3 => {
-                                    // CALL cc[y], nn
-                                }
-                                4 | 5 | 6 | 7 | _ => {
-                                    // document says removed, investigate
-                                    todo!()
-                                }
-                            }
+                            // AND
                         }
                         5 => {
-                            if Self::opcode_q(Self::first_byte(bytes)) {
-                                match Self::opcode_p(Self::first_byte(bytes)) {
-                                    0 => {
-                                        // CALL nn
-                                    }
-                                    1 | 2 | 3 | _ => {
-                                        // document says removed, investigate
-                                        todo!()
-                                    }
-                                }
-                            }
+                            // XOR
                         }
                         6 => {
-                            // alu[y] n
+                            // OR
                         }
                         7 | _ => {
-                            // RST y*8
+                            // CP
+                        }
+                    }
+                }
+                3 | _ => match Self::opcode_z(Self::first_byte(bytes)) {
+                    0 => match Self::opcode_y(Self::first_byte(bytes)) {
+                        0 | 1 | 2 | 3 => {
+                            // RET cc[y]
+                        }
+                        4 => {
+                            // LD (0xFF00 + n), A
+                        }
+                        5 => {
+                            // ADD SP, d
+                        }
+                        6 => {
+                            // LD A, (0xFF00 + n)
+                        }
+                        7 | _ => {
+                            // LD HL, SP+ d
                         }
                     },
-                }
+                    1 => {
+                        if Self::opcode_q(Self::first_byte(bytes)) {
+                            match Self::opcode_p(Self::first_byte(bytes)) {
+                                0 => {
+                                    // RET
+                                }
+                                1 => {
+                                    // RETI
+                                }
+                                2 => {
+                                    // JP HL
+                                }
+                                3 | _ => {
+                                    // LD SP, HL
+                                }
+                            }
+                        } else {
+                            // POP rp2[p]
+                        }
+                    }
+                    2 => {
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 | 1 | 2 | 3 => {
+                                // JP cc[y], nn
+                            }
+                            4 => {
+                                // LD (0xFF00+C), A
+                            }
+                            5 => {
+                                // LD (nn), A
+                            }
+                            6 => {
+                                // LD A, (0xFF00+C)
+                            }
+                            7 | _ => {
+                                // LD A, (nn)
+                            }
+                        }
+                    }
+                    3 => {
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 => {
+                                // JP nn
+                            } /*
+                            1 => {
+                            // CB prefix, never encountered.
+                            }
+                             */
+                            2 | 3 | 4 | 5 => {
+                                // ILLEGAL OPCODE
+                            }
+                            6 => {
+                                // DI
+                            }
+                            7 | _ => {
+                                // EI
+                            }
+                        }
+                    }
+                    4 => {
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 | 1 | 2 | 3 => {
+                                // CALL cc[y], nn
+                            }
+                            4 | 5 | 6 | 7 | _ => {
+                                // ILLEGAL OPCODE
+                            }
+                        }
+                    }
+                    5 => {
+                        if Self::opcode_q(Self::first_byte(bytes)) {
+                            match Self::opcode_p(Self::first_byte(bytes)) {
+                                0 => {
+                                    // CALL nn
+                                }
+                                1 | 2 | 3 | _ => {
+                                    // ILLEGAL OPCODE
+                                }
+                            }
+                        } else {
+                            // call with condition y < 4
+                        }
+                    }
+                    6 => {
+                        // alu[y] n
+                        match Self::opcode_y(Self::first_byte(bytes)) {
+                            0 => {
+                                // ADD
+                            }
+                            1 => {
+                                // ADC
+                            }
+                            2 => {
+                                // SUB
+                            }
+                            3 => {
+                                // SBC
+                            }
+                            4 => {
+                                // AND
+                            }
+                            5 => {
+                                // XOR
+                            }
+                            6 => {
+                                // OR
+                            }
+                            7 | _ => {
+                                // CP
+                            }
+                        }
+                    }
+                    7 | _ => {
+                        // RST y*8
+                    }
+                },
             }
-        };
+        }
 
         Instruction::NOP
     }
