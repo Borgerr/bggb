@@ -135,6 +135,24 @@ pub enum Instruction {
     PUSH { r: Register },
 
     RST { arg: u8 },
+
+    AddImmediate { n: u8 },
+    AdcImmediate { n: u8 },
+    SubImmediate { n: u8 },
+    SbcImmediate { n: u8 },
+    AndImmediate { n: u8 },
+    XorImmediate { n: u8 },
+    OrImmediate { n: u8 },
+    CpImmediate { n: u8 },
+
+    AddRegister { r: Register },
+    AdcRegister { r: Register },
+    SubRegister { r: Register },
+    SbcRegister { r: Register },
+    AndRegister { r: Register },
+    XorRegister { r: Register },
+    OrRegister { r: Register },
+    CpRegister { r: Register },
 }
 
 impl Instruction {
@@ -342,34 +360,19 @@ impl Instruction {
     }
 
     fn prefixless_x2(bytes: u32) -> Instruction {
-        match Self::opcode_y(Self::first_byte(bytes)) {
-            0 => {
-                // ADD
-            }
-            1 => {
-                // ADC
-            }
-            2 => {
-                // SUB
-            }
-            3 => {
-                // SBC
-            }
-            4 => {
-                // AND
-            }
-            5 => {
-                // XOR
-            }
-            6 => {
-                // OR
-            }
-            7 | _ => {
-                // CP
-            }
-        };
+        let z = Self::opcode_z(Self::first_byte(bytes));
+        let r = Register::r_lookup(z);
 
-        Instruction::NOP
+        match Self::opcode_y(Self::first_byte(bytes)) {
+            0 => Instruction::AddRegister { r },
+            1 => Instruction::AdcRegister { r },
+            2 => Instruction::SubRegister { r },
+            3 => Instruction::SbcRegister { r },
+            4 => Instruction::AndRegister { r },
+            5 => Instruction::XorRegister { r },
+            6 => Instruction::OrRegister { r },
+            7 | _ => Instruction::CpRegister { r },
+        }
     }
 
     fn prefixless_x3(bytes: u32) -> Instruction {
@@ -483,35 +486,33 @@ impl Instruction {
             6 => {
                 // alu[y] n
                 match y {
-                    0 => {
-                        // ADD
-                    }
-                    1 => {
-                        // ADC
-                    }
-                    2 => {
-                        // SUB
-                    }
-                    3 => {
-                        // SBC
-                    }
-                    4 => {
-                        // AND
-                    }
-                    5 => {
-                        // XOR
-                    }
-                    6 => {
-                        // OR
-                    }
-                    7 | _ => {
-                        // CP
-                    }
+                    0 => Instruction::AddImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    1 => Instruction::AdcImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    2 => Instruction::SubImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    3 => Instruction::SbcImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    4 => Instruction::AndImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    5 => Instruction::XorImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    6 => Instruction::OrImmediate {
+                        n: Self::second_byte(bytes),
+                    },
+                    7 | _ => Instruction::CpImmediate {
+                        n: Self::second_byte(bytes),
+                    },
                 }
             }
             7 | _ => Instruction::RST { arg: y << 3 },
-        };
-
-        Instruction::NOP
+        }
     }
 }
