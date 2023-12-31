@@ -4,6 +4,8 @@ use std::io::{stdin, Read};
 mod memory;
 use memory::Memory;
 
+mod cpu;
+
 type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 fn main() -> Result<()> {
