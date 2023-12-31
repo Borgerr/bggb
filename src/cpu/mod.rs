@@ -51,6 +51,7 @@ impl CPU {
     }
 
     fn execute(&mut self, instr: Instruction, mem: &Memory) -> Result<(), CpuError> {
+        // remember if the instruction ends up being short, like NOP, reduce the program counter again
         Ok(())
     }
 }
