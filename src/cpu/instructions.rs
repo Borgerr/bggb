@@ -79,9 +79,12 @@ pub enum Instruction {
     Load8 { r: Register, n: u8 },
     LoadFF00Plus { r: Register, n: u8 },
     LoadReg { r1: Register, r2: Register },
+    StoreReg { r1: Register, loc: u16 },
 
     Jump { nn: u16 },
     JumpConditional { f: Flag, nn: u16 },
+    JumpRegister { d: i8 },
+    JumpRegConditional { f: Flag, d: i8 },
 
     RLC { r: Register },
     RRC { r: Register },
@@ -91,6 +94,24 @@ pub enum Instruction {
     SRA { r: Register },
     SWAP { r: Register },
     SRL { r: Register },
+
+    BIT { y: u8, r: Register },
+    RES { y: u8, r: Register },
+    SET { y: u8, r: Register },
+
+    ADD { r1: Register, r2: Register },
+
+    DEC { r: Register },
+    INC { r: Register },
+
+    RLCA,
+    RRCA,
+    RLA,
+    RRA,
+    DAA,
+    CPL,
+    SCF,
+    CCF,
 }
 
 impl Instruction {
@@ -141,48 +162,26 @@ impl Instruction {
         if Self::first_byte(bytes) == 0xcb {
             let y = Self::opcode_y(Self::second_byte(bytes));
             let z = Self::opcode_z(Self::second_byte(bytes));
+            let r = Register::r_lookup(z);
 
             match Self::opcode_x(Self::second_byte(bytes)) {
                 0 => {
                     // rot[y] r[z]
                     match y {
-                        0 => Instruction::RLC {
-                            r: Register::r_lookup(z),
-                        },
-                        1 => Instruction::RRC {
-                            r: Register::r_lookup(z),
-                        },
-                        2 => Instruction::RL {
-                            r: Register::r_lookup(z),
-                        },
-                        3 => Instruction::RR {
-                            r: Register::r_lookup(z),
-                        },
-                        4 => Instruction::SLA {
-                            r: Register::r_lookup(z),
-                        },
-                        5 => Instruction::SRA {
-                            r: Register::r_lookup(z),
-                        },
-                        6 => Instruction::SWAP {
-                            r: Register::r_lookup(z),
-                        },
-                        7 | _ => Instruction::SRL {
-                            r: Register::r_lookup(z),
-                        },
+                        0 => Instruction::RLC { r },
+                        1 => Instruction::RRC { r },
+                        2 => Instruction::RL { r },
+                        3 => Instruction::RR { r },
+                        4 => Instruction::SLA { r },
+                        5 => Instruction::SRA { r },
+                        6 => Instruction::SWAP { r },
+                        7 | _ => Instruction::SRL { r },
                     }
                 }
-                1 => {
-                    // BIT y, r[z]
-                }
-                2 => {
-                    // RES y, r[z]
-                }
-                3 | _ => {
-                    // SET y, r[z]
-                }
-            };
-            Instruction::NOP
+                1 => Instruction::BIT { y, r },
+                2 => Instruction::RES { y, r },
+                3 | _ => Instruction::SET { y, r },
+            }
         } else {
             // first byte is not a prefix byte
             match Self::opcode_x(Self::first_byte(bytes)) {
@@ -200,111 +199,108 @@ impl Instruction {
         let p = Self::opcode_p(Self::first_byte(bytes));
 
         match Self::opcode_z(Self::first_byte(bytes)) {
-            0 => {
-                match y {
-                    0 => {
-                        // NOP
-                    }
-                    1 => {
-                        // LD (nn), SP
-                    }
-                    2 => {
-                        // STOP
-                    }
-                    3 => {
-                        // JR d
-                    }
-                    4 | 5 | 6 | 7 | _ => {
-                        // JR cc[y-4], d
-                    }
-                }
-            }
+            0 => match y {
+                0 => Instruction::NOP,
+                1 => Instruction::StoreReg {
+                    r1: Register::SP,
+                    loc: Self::second_and_third_bytes(bytes),
+                },
+
+                2 => Instruction::STOP,
+                3 => Instruction::JumpRegister {
+                    d: Self::second_byte(bytes) as i8,
+                },
+                4 | 5 | 6 | 7 | _ => Instruction::JumpRegConditional {
+                    f: Flag::cc_lookup(y - 4),
+                    d: Self::second_byte(bytes) as i8,
+                },
+            },
             1 => {
                 if q {
-                    // ADD HL, rp[p]
+                    Instruction::ADD {
+                        r1: Register::HL,
+                        r2: Register::rp_lookup(p),
+                    }
                 } else {
-                    // LD rp[p], nn
+                    Instruction::Load16 {
+                        r: Register::rp_lookup(p),
+                        nn: Self::second_and_third_bytes(bytes),
+                    }
                 }
             }
             2 => {
                 if q {
                     match p {
-                        0 => {
-                            // LD A, (BC)
-                        }
-                        1 => {
-                            // LD A, (DE)
-                        }
-                        2 => {
-                            // LD A, (HL+)
-                        }
-                        3 | _ => {
-                            // LD A, (HL-)
-                        }
+                        0 => Instruction::LoadReg {
+                            r1: Register::A,
+                            r2: Register::BC,
+                        },
+                        1 => Instruction::LoadReg {
+                            r1: Register::A,
+                            r2: Register::BC,
+                        },
+                        2 => Instruction::LoadReg {
+                            r1: Register::A,
+                            r2: Register::HLplus,
+                        },
+                        3 | _ => Instruction::LoadReg {
+                            r1: Register::A,
+                            r2: Register::HLminus,
+                        },
                     }
                 } else {
                     match p {
-                        0 => {
-                            // LD (BC), A
-                        }
-                        1 => {
-                            // LD (DE), A
-                        }
-                        2 => {
-                            // LD (HL+), A
-                        }
-                        3 | _ => {
-                            // LD (HL-), A
-                        }
+                        0 => Instruction::LoadReg {
+                            r1: Register::BC,
+                            r2: Register::A,
+                        },
+                        1 => Instruction::LoadReg {
+                            r1: Register::DE,
+                            r2: Register::A,
+                        },
+                        2 => Instruction::LoadReg {
+                            r1: Register::HLplus,
+                            r2: Register::A,
+                        },
+                        3 | _ => Instruction::LoadReg {
+                            r1: Register::HLminus,
+                            r2: Register::A,
+                        },
                     }
                 }
             }
             3 => {
                 if q {
-                    // DEC rp[p]
+                    Instruction::DEC {
+                        r: Register::rp_lookup(p),
+                    }
                 } else {
-                    // INC rp[p]
-                }
-            }
-            4 => {
-                // INC r[y]
-            }
-            5 => {
-                // DEC r[y]
-            }
-            6 => {
-                // LD r[y], n
-            }
-            7 | _ => {
-                match y {
-                    0 => {
-                        // RLCA
-                    }
-                    1 => {
-                        // RRCA
-                    }
-                    2 => {
-                        // RLA
-                    }
-                    3 => {
-                        // RRA
-                    }
-                    4 => {
-                        // DAA
-                    }
-                    5 => {
-                        // CPL
-                    }
-                    6 => {
-                        // SCF
-                    }
-                    7 | _ => {
-                        // CCF
+                    Instruction::INC {
+                        r: Register::rp_lookup(p),
                     }
                 }
             }
-        };
-        Instruction::NOP
+            4 => Instruction::INC {
+                r: Register::r_lookup(y),
+            },
+            5 => Instruction::DEC {
+                r: Register::r_lookup(y),
+            },
+            6 => Instruction::Load8 {
+                r: Register::r_lookup(y),
+                n: Self::second_byte(bytes),
+            },
+            7 | _ => match y {
+                0 => Instruction::RLCA,
+                1 => Instruction::RRCA,
+                2 => Instruction::RLA,
+                3 => Instruction::RRA,
+                4 => Instruction::DAA,
+                5 => Instruction::CPL,
+                6 => Instruction::SCF,
+                7 | _ => Instruction::CCF,
+            },
+        }
     }
 
     fn prefixless_x1(bytes: u32) -> Instruction {
