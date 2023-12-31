@@ -1,5 +1,3 @@
-use std::os::linux::raw;
-
 pub enum Register {
     AF,
     BC,
@@ -79,12 +77,19 @@ pub enum Instruction {
     Load8 { r: Register, n: u8 },
     LoadFF00Plus { r: Register, n: u8 },
     LoadReg { r1: Register, r2: Register },
+    LoadSPToHLWithOffset { d: i8 },
+    LoadFF00PlusC, // LD A, (0xFF00+C)
+
+    StoreFF00Plus { r: Register, n: u8 },
     StoreReg { r1: Register, loc: u16 },
+    StoreImmediate { loc: u16 }, // LD (nn), A
+    StoreFF00PlusC,              // LD (0xFF00+C), A
 
     Jump { nn: u16 },
     JumpConditional { f: Flag, nn: u16 },
-    JumpRegister { d: i8 },
+    JR { d: i8 },
     JumpRegConditional { f: Flag, d: i8 },
+    JumpToHL,
 
     RLC { r: Register },
     RRC { r: Register },
@@ -99,7 +104,8 @@ pub enum Instruction {
     RES { y: u8, r: Register },
     SET { y: u8, r: Register },
 
-    ADD { r1: Register, r2: Register },
+    AddRegisters { r1: Register, r2: Register },
+    AddSigned { r: Register, d: i8 },
 
     DEC { r: Register },
     INC { r: Register },
@@ -112,6 +118,23 @@ pub enum Instruction {
     CPL,
     SCF,
     CCF,
+
+    RET { f: Flag },
+
+    RETNoParam,
+    RETI,
+
+    POP { r: Register },
+
+    DI,
+    EI,
+
+    CallConditional { f: Flag, nn: u16 },
+    Call { nn: u16 },
+
+    PUSH { r: Register },
+
+    RST { arg: u8 },
 }
 
 impl Instruction {
@@ -207,7 +230,7 @@ impl Instruction {
                 },
 
                 2 => Instruction::STOP,
-                3 => Instruction::JumpRegister {
+                3 => Instruction::JR {
                     d: Self::second_byte(bytes) as i8,
                 },
                 4 | 5 | 6 | 7 | _ => Instruction::JumpRegConditional {
@@ -217,7 +240,7 @@ impl Instruction {
             },
             1 => {
                 if q {
-                    Instruction::ADD {
+                    Instruction::AddRegisters {
                         r1: Register::HL,
                         r2: Register::rp_lookup(p),
                     }
@@ -356,103 +379,105 @@ impl Instruction {
 
         match Self::opcode_z(Self::first_byte(bytes)) {
             0 => match y {
-                0 | 1 | 2 | 3 => {
-                    // RET cc[y]
-                }
-                4 => {
-                    // LD (0xFF00 + n), A
-                }
-                5 => {
-                    // ADD SP, d
-                }
-                6 => {
-                    // LD A, (0xFF00 + n)
-                }
-                7 | _ => {
-                    // LD HL, SP+ d
-                }
+                0 | 1 | 2 | 3 => Instruction::RET {
+                    f: Flag::cc_lookup(y),
+                },
+                4 => Instruction::StoreFF00Plus {
+                    r: Register::A,
+                    n: Self::second_byte(bytes),
+                },
+                5 => Instruction::AddSigned {
+                    r: Register::SP,
+                    d: Self::second_byte(bytes) as i8,
+                },
+                6 => Instruction::LoadFF00Plus {
+                    r: Register::A,
+                    n: Self::second_byte(bytes),
+                },
+                7 | _ => Instruction::LoadSPToHLWithOffset {
+                    d: Self::second_byte(bytes) as i8,
+                },
             },
             1 => {
                 if q {
                     match p {
-                        0 => {
-                            // RET
-                        }
-                        1 => {
-                            // RETI
-                        }
-                        2 => {
-                            // JP HL
-                        }
-                        3 | _ => {
-                            // LD SP, HL
-                        }
+                        0 => Instruction::RETNoParam,
+                        1 => Instruction::RETI,
+                        2 => Instruction::JumpToHL,
+                        3 | _ => Instruction::LoadReg {
+                            r1: Register::SP,
+                            r2: Register::HL,
+                        },
                     }
                 } else {
-                    // POP rp2[p]
+                    Instruction::POP {
+                        r: Register::rp2_lookup(p),
+                    }
                 }
             }
             2 => {
                 match y {
-                    0 | 1 | 2 | 3 => {
-                        // JP cc[y], nn
-                    }
+                    0 | 1 | 2 | 3 => Instruction::JumpConditional {
+                        f: Flag::cc_lookup(y),
+                        nn: Self::second_and_third_bytes(bytes),
+                    },
                     4 => {
                         // LD (0xFF00+C), A
+                        Instruction::StoreFF00PlusC
                     }
                     5 => {
                         // LD (nn), A
+                        Instruction::StoreImmediate {
+                            loc: Self::second_and_third_bytes(bytes),
+                        }
                     }
                     6 => {
                         // LD A, (0xFF00+C)
+                        Instruction::LoadFF00PlusC
                     }
                     7 | _ => {
                         // LD A, (nn)
+                        Instruction::Load16 {
+                            r: Register::A,
+                            nn: Self::second_and_third_bytes(bytes),
+                        }
                     }
                 }
             }
             3 => {
                 match y {
-                    0 => {
-                        // JP nn
-                    } /*
+                    0 => Instruction::Jump {
+                        nn: Self::second_and_third_bytes(bytes),
+                    }, /*
                     1 => {
                     // CB prefix, never encountered.
                     }
                      */
-                    2 | 3 | 4 | 5 => {
-                        // ILLEGAL OPCODE
-                    }
-                    6 => {
-                        // DI
-                    }
-                    7 | _ => {
-                        // EI
-                    }
+                    2 | 3 | 4 | 5 => Instruction::ILLEGAL,
+                    6 => Instruction::DI,
+                    7 | _ => Instruction::EI,
                 }
             }
-            4 => {
-                match y {
-                    0 | 1 | 2 | 3 => {
-                        // CALL cc[y], nn
-                    }
-                    4 | 5 | 6 | 7 | _ => {
-                        // ILLEGAL OPCODE
-                    }
-                }
-            }
+            4 => match y {
+                0 | 1 | 2 | 3 => Instruction::CallConditional {
+                    f: Flag::cc_lookup(y),
+                    nn: Self::second_and_third_bytes(bytes),
+                },
+                4 | 5 | 6 | 7 | _ => Instruction::ILLEGAL,
+            },
             5 => {
                 if q {
                     match p {
-                        0 => {
-                            // CALL nn
-                        }
-                        1 | 2 | 3 | _ => {
-                            // ILLEGAL OPCODE
-                        }
+                        0 => Instruction::Call {
+                            nn: Self::second_and_third_bytes(bytes),
+                        },
+                        1 | 2 | 3 | _ => Instruction::ILLEGAL,
                     }
                 } else {
-                    // CALL cc[y]
+                    // PUSH rp2[p]
+                    Instruction::PUSH {
+                        r: Register::rp2_lookup(p),
+                    }
                 }
             }
             6 => {
@@ -484,9 +509,7 @@ impl Instruction {
                     }
                 }
             }
-            7 | _ => {
-                // RST y*8
-            }
+            7 | _ => Instruction::RST { arg: y << 3 },
         };
 
         Instruction::NOP
