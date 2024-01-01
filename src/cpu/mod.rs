@@ -209,6 +209,8 @@ impl CPU {
     }
 
     fn load_sp_to_hl_with_offset(&mut self, mem: &Memory, d: i8) -> Result<(), CpuError> {
+        self.pc -= 2;
+
         let index = ((self.sp as i32) + (d as i32)) as usize;
         if index > 0xffff {
             return Err(CpuError::IndexOutOfBounds { index });
@@ -220,11 +222,15 @@ impl CPU {
     }
 
     fn load_ff00_plus_n(&mut self, mem: &Memory, n: u8) {
+        self.pc -= 2;
+
         self.af |= 0xff00;
         self.af &= mem[(0xff00) + (n as usize)] as u16;
     }
 
     fn load_ff00_plus_c(&mut self, mem: &Memory) {
+        self.pc -= 3;
+
         self.af |= 0xff00;
         self.af &= mem[(0xff00) + Self::lo_byte(self.bc) as usize] as u16;
     }
