@@ -1,4 +1,4 @@
-pub enum Register {
+pub enum RegisterID {
     AF,
     BC,
     DE,
@@ -16,53 +16,53 @@ pub enum Register {
     HLplus,
     HLminus,
 }
-impl Register {
-    pub fn r_lookup(val: u8) -> Register {
+impl RegisterID {
+    pub fn r_lookup(val: u8) -> RegisterID {
         // val is assumed to be less than 8
         match val {
-            0 => Register::B,
-            1 => Register::C,
-            2 => Register::D,
-            3 => Register::E,
-            4 => Register::H,
-            5 => Register::L,
-            6 => Register::HL,
-            7 | _ => Register::A,
+            0 => RegisterID::B,
+            1 => RegisterID::C,
+            2 => RegisterID::D,
+            3 => RegisterID::E,
+            4 => RegisterID::H,
+            5 => RegisterID::L,
+            6 => RegisterID::HL,
+            7 | _ => RegisterID::A,
         }
     }
-    pub fn rp_lookup(val: u8) -> Register {
+    pub fn rp_lookup(val: u8) -> RegisterID {
         // val is assumed to be less than 4
         match val {
-            0 => Register::BC,
-            1 => Register::DE,
-            2 => Register::HL,
-            3 | _ => Register::SP,
+            0 => RegisterID::BC,
+            1 => RegisterID::DE,
+            2 => RegisterID::HL,
+            3 | _ => RegisterID::SP,
         }
     }
-    pub fn rp2_lookup(val: u8) -> Register {
+    pub fn rp2_lookup(val: u8) -> RegisterID {
         // val is assumed to be less than 4
         match val {
-            0 => Register::BC,
-            1 => Register::DE,
-            2 => Register::HL,
-            3 | _ => Register::AF,
+            0 => RegisterID::BC,
+            1 => RegisterID::DE,
+            2 => RegisterID::HL,
+            3 | _ => RegisterID::AF,
         }
     }
 }
-pub enum Flag {
+pub enum FlagID {
     NZ,
     Z,
     NC,
     C,
 }
-impl Flag {
-    pub fn cc_lookup(val: u8) -> Flag {
+impl FlagID {
+    pub fn cc_lookup(val: u8) -> FlagID {
         // val is assumed to be less than 4
         match val {
-            0 => Flag::NZ,
-            1 => Flag::Z,
-            2 => Flag::NC,
-            3 | _ => Flag::C,
+            0 => FlagID::NZ,
+            1 => FlagID::Z,
+            2 => FlagID::NC,
+            3 | _ => FlagID::C,
         }
     }
 }
@@ -73,42 +73,42 @@ pub enum Instruction {
     HALT,
     ILLEGAL,
 
-    Load16 { r: Register, nn: u16 },
-    Load8 { r: Register, n: u8 },
-    LoadFF00Plus { r: Register, n: u8 },
-    LoadReg { r1: Register, r2: Register },
+    Load16 { r: RegisterID, nn: u16 },
+    Load8 { r: RegisterID, n: u8 },
+    LoadFF00Plus { r: RegisterID, n: u8 },
+    LoadReg { r1: RegisterID, r2: RegisterID },
     LoadSPToHLWithOffset { d: i8 },
     LoadFF00PlusC, // LD A, (0xFF00+C)
 
-    StoreFF00Plus { r: Register, n: u8 },
-    StoreReg { r1: Register, loc: u16 },
+    StoreFF00Plus { r: RegisterID, n: u8 },
+    StoreReg { r1: RegisterID, loc: u16 },
     StoreImmediate { loc: u16 }, // LD (nn), A
     StoreFF00PlusC,              // LD (0xFF00+C), A
 
     Jump { nn: u16 },
-    JumpConditional { f: Flag, nn: u16 },
+    JumpConditional { f: FlagID, nn: u16 },
     JR { d: i8 },
-    JumpRegConditional { f: Flag, d: i8 },
+    JumpRegConditional { f: FlagID, d: i8 },
     JumpToHL,
 
-    RLC { r: Register },
-    RRC { r: Register },
-    RL { r: Register },
-    RR { r: Register },
-    SLA { r: Register },
-    SRA { r: Register },
-    SWAP { r: Register },
-    SRL { r: Register },
+    RLC { r: RegisterID },
+    RRC { r: RegisterID },
+    RL { r: RegisterID },
+    RR { r: RegisterID },
+    SLA { r: RegisterID },
+    SRA { r: RegisterID },
+    SWAP { r: RegisterID },
+    SRL { r: RegisterID },
 
-    BIT { y: u8, r: Register },
-    RES { y: u8, r: Register },
-    SET { y: u8, r: Register },
+    BIT { y: u8, r: RegisterID },
+    RES { y: u8, r: RegisterID },
+    SET { y: u8, r: RegisterID },
 
-    AddRegisters { r1: Register, r2: Register },
-    AddSigned { r: Register, d: i8 },
+    AddRegisters { r1: RegisterID, r2: RegisterID },
+    AddSigned { r: RegisterID, d: i8 },
 
-    DEC { r: Register },
-    INC { r: Register },
+    DEC { r: RegisterID },
+    INC { r: RegisterID },
 
     RLCA,
     RRCA,
@@ -119,20 +119,20 @@ pub enum Instruction {
     SCF,
     CCF,
 
-    RET { f: Flag },
+    RET { f: FlagID },
 
     RETNoParam,
     RETI,
 
-    POP { r: Register },
+    POP { r: RegisterID },
 
     DI,
     EI,
 
-    CallConditional { f: Flag, nn: u16 },
+    CallConditional { f: FlagID, nn: u16 },
     Call { nn: u16 },
 
-    PUSH { r: Register },
+    PUSH { r: RegisterID },
 
     RST { arg: u8 },
 
@@ -145,14 +145,14 @@ pub enum Instruction {
     OrImmediate { n: u8 },
     CpImmediate { n: u8 },
 
-    AddRegister { r: Register },
-    AdcRegister { r: Register },
-    SubRegister { r: Register },
-    SbcRegister { r: Register },
-    AndRegister { r: Register },
-    XorRegister { r: Register },
-    OrRegister { r: Register },
-    CpRegister { r: Register },
+    AddRegister { r: RegisterID },
+    AdcRegister { r: RegisterID },
+    SubRegister { r: RegisterID },
+    SbcRegister { r: RegisterID },
+    AndRegister { r: RegisterID },
+    XorRegister { r: RegisterID },
+    OrRegister { r: RegisterID },
+    CpRegister { r: RegisterID },
 }
 
 impl Instruction {
@@ -203,7 +203,7 @@ impl Instruction {
         if Self::first_byte(bytes) == 0xcb {
             let y = Self::opcode_y(Self::second_byte(bytes));
             let z = Self::opcode_z(Self::second_byte(bytes));
-            let r = Register::r_lookup(z);
+            let r = RegisterID::r_lookup(z);
 
             match Self::opcode_x(Self::second_byte(bytes)) {
                 0 => {
@@ -243,7 +243,7 @@ impl Instruction {
             0 => match y {
                 0 => Instruction::NOP,
                 1 => Instruction::StoreReg {
-                    r1: Register::SP,
+                    r1: RegisterID::SP,
                     loc: Self::second_and_third_bytes(bytes),
                 },
 
@@ -252,19 +252,19 @@ impl Instruction {
                     d: Self::second_byte(bytes) as i8,
                 },
                 4 | 5 | 6 | 7 | _ => Instruction::JumpRegConditional {
-                    f: Flag::cc_lookup(y - 4),
+                    f: FlagID::cc_lookup(y - 4),
                     d: Self::second_byte(bytes) as i8,
                 },
             },
             1 => {
                 if q {
                     Instruction::AddRegisters {
-                        r1: Register::HL,
-                        r2: Register::rp_lookup(p),
+                        r1: RegisterID::HL,
+                        r2: RegisterID::rp_lookup(p),
                     }
                 } else {
                     Instruction::Load16 {
-                        r: Register::rp_lookup(p),
+                        r: RegisterID::rp_lookup(p),
                         nn: Self::second_and_third_bytes(bytes),
                     }
                 }
@@ -273,39 +273,39 @@ impl Instruction {
                 if q {
                     match p {
                         0 => Instruction::LoadReg {
-                            r1: Register::A,
-                            r2: Register::BC,
+                            r1: RegisterID::A,
+                            r2: RegisterID::BC,
                         },
                         1 => Instruction::LoadReg {
-                            r1: Register::A,
-                            r2: Register::BC,
+                            r1: RegisterID::A,
+                            r2: RegisterID::BC,
                         },
                         2 => Instruction::LoadReg {
-                            r1: Register::A,
-                            r2: Register::HLplus,
+                            r1: RegisterID::A,
+                            r2: RegisterID::HLplus,
                         },
                         3 | _ => Instruction::LoadReg {
-                            r1: Register::A,
-                            r2: Register::HLminus,
+                            r1: RegisterID::A,
+                            r2: RegisterID::HLminus,
                         },
                     }
                 } else {
                     match p {
                         0 => Instruction::LoadReg {
-                            r1: Register::BC,
-                            r2: Register::A,
+                            r1: RegisterID::BC,
+                            r2: RegisterID::A,
                         },
                         1 => Instruction::LoadReg {
-                            r1: Register::DE,
-                            r2: Register::A,
+                            r1: RegisterID::DE,
+                            r2: RegisterID::A,
                         },
                         2 => Instruction::LoadReg {
-                            r1: Register::HLplus,
-                            r2: Register::A,
+                            r1: RegisterID::HLplus,
+                            r2: RegisterID::A,
                         },
                         3 | _ => Instruction::LoadReg {
-                            r1: Register::HLminus,
-                            r2: Register::A,
+                            r1: RegisterID::HLminus,
+                            r2: RegisterID::A,
                         },
                     }
                 }
@@ -313,22 +313,22 @@ impl Instruction {
             3 => {
                 if q {
                     Instruction::DEC {
-                        r: Register::rp_lookup(p),
+                        r: RegisterID::rp_lookup(p),
                     }
                 } else {
                     Instruction::INC {
-                        r: Register::rp_lookup(p),
+                        r: RegisterID::rp_lookup(p),
                     }
                 }
             }
             4 => Instruction::INC {
-                r: Register::r_lookup(y),
+                r: RegisterID::r_lookup(y),
             },
             5 => Instruction::DEC {
-                r: Register::r_lookup(y),
+                r: RegisterID::r_lookup(y),
             },
             6 => Instruction::Load8 {
-                r: Register::r_lookup(y),
+                r: RegisterID::r_lookup(y),
                 n: Self::second_byte(bytes),
             },
             7 | _ => match y {
@@ -353,15 +353,15 @@ impl Instruction {
         } else {
             // LD r[y], r[z]
             Instruction::LoadReg {
-                r1: Register::r_lookup(y),
-                r2: Register::r_lookup(z),
+                r1: RegisterID::r_lookup(y),
+                r2: RegisterID::r_lookup(z),
             }
         }
     }
 
     fn prefixless_x2(bytes: u32) -> Instruction {
         let z = Self::opcode_z(Self::first_byte(bytes));
-        let r = Register::r_lookup(z);
+        let r = RegisterID::r_lookup(z);
 
         match Self::opcode_y(Self::first_byte(bytes)) {
             0 => Instruction::AddRegister { r },
@@ -383,18 +383,18 @@ impl Instruction {
         match Self::opcode_z(Self::first_byte(bytes)) {
             0 => match y {
                 0 | 1 | 2 | 3 => Instruction::RET {
-                    f: Flag::cc_lookup(y),
+                    f: FlagID::cc_lookup(y),
                 },
                 4 => Instruction::StoreFF00Plus {
-                    r: Register::A,
+                    r: RegisterID::A,
                     n: Self::second_byte(bytes),
                 },
                 5 => Instruction::AddSigned {
-                    r: Register::SP,
+                    r: RegisterID::SP,
                     d: Self::second_byte(bytes) as i8,
                 },
                 6 => Instruction::LoadFF00Plus {
-                    r: Register::A,
+                    r: RegisterID::A,
                     n: Self::second_byte(bytes),
                 },
                 7 | _ => Instruction::LoadSPToHLWithOffset {
@@ -408,20 +408,20 @@ impl Instruction {
                         1 => Instruction::RETI,
                         2 => Instruction::JumpToHL,
                         3 | _ => Instruction::LoadReg {
-                            r1: Register::SP,
-                            r2: Register::HL,
+                            r1: RegisterID::SP,
+                            r2: RegisterID::HL,
                         },
                     }
                 } else {
                     Instruction::POP {
-                        r: Register::rp2_lookup(p),
+                        r: RegisterID::rp2_lookup(p),
                     }
                 }
             }
             2 => {
                 match y {
                     0 | 1 | 2 | 3 => Instruction::JumpConditional {
-                        f: Flag::cc_lookup(y),
+                        f: FlagID::cc_lookup(y),
                         nn: Self::second_and_third_bytes(bytes),
                     },
                     4 => {
@@ -441,7 +441,7 @@ impl Instruction {
                     7 | _ => {
                         // LD A, (nn)
                         Instruction::Load16 {
-                            r: Register::A,
+                            r: RegisterID::A,
                             nn: Self::second_and_third_bytes(bytes),
                         }
                     }
@@ -463,7 +463,7 @@ impl Instruction {
             }
             4 => match y {
                 0 | 1 | 2 | 3 => Instruction::CallConditional {
-                    f: Flag::cc_lookup(y),
+                    f: FlagID::cc_lookup(y),
                     nn: Self::second_and_third_bytes(bytes),
                 },
                 4 | 5 | 6 | 7 | _ => Instruction::ILLEGAL,
@@ -479,7 +479,7 @@ impl Instruction {
                 } else {
                     // PUSH rp2[p]
                     Instruction::PUSH {
-                        r: Register::rp2_lookup(p),
+                        r: RegisterID::rp2_lookup(p),
                     }
                 }
             }
