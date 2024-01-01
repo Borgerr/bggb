@@ -1,11 +1,14 @@
 mod instructions;
-use instructions::Instruction;
+use instructions::{FlagID, Instruction, RegisterID};
 
 use crate::memory::Memory;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CpuError {
     FetchError { pc: u16 },
+    IllegalInstruction { pc: u16 },
+    ReadingIntoInvalidReg { r: RegisterID },
+    IndexOutOfBounds { index: usize },
 }
 
 struct CPU {
@@ -56,21 +59,21 @@ impl CPU {
             Instruction::NOP => {}
             Instruction::STOP => {}
             Instruction::HALT => {}
-            Instruction::ILLEGAL => {}
+            Instruction::ILLEGAL => return Err(CpuError::IllegalInstruction { pc: self.pc - 4 }),
 
-            Instruction::Load16 { r, nn } => {}
-            Instruction::Load8 { r, n } => {}
-            Instruction::LoadFF00Plus { r, n } => {}
+            Instruction::Load16 { r, nn } => self.load_immediate16(r, nn)?,
+            Instruction::Load8 { r, n } => self.load_immediate8(r, n)?,
+            Instruction::LoadFF00PlusImmediate { n } => self.load_ff00_plus_n(mem, n),
             Instruction::LoadReg { r1, r2 } => {}
-            Instruction::LoadSPToHLWithOffset { d } => {}
-            Instruction::LoadFF00PlusC => {}
+            Instruction::LoadSPToHLWithOffset { d } => self.load_sp_to_hl_with_offset(mem, d)?,
+            Instruction::LoadFF00PlusC => self.load_ff00_plus_c(mem),
 
             Instruction::StoreFF00Plus { r, n } => {}
             Instruction::StoreReg { r1, loc } => {}
             Instruction::StoreImmediate { loc } => {}
             Instruction::StoreFF00PlusC => {}
 
-            Instruction::Jump { nn } => {}
+            Instruction::Jump { nn } => self.jump(nn),
             Instruction::JumpConditional { f, nn } => {}
             Instruction::JR { d } => {}
             Instruction::JumpRegConditional { f, d } => {}
@@ -141,5 +144,88 @@ impl CPU {
         }
 
         Ok(())
+    }
+
+    /*
+       instructions
+    */
+    fn jump(&mut self, nn: u16) {
+        self.pc = nn;
+    }
+
+    fn load_immediate16(&mut self, r: RegisterID, nn: u16) -> Result<(), CpuError> {
+        self.pc -= 1; // instruction has 3 bytes
+
+        match r {
+            RegisterID::AF => self.af = nn,
+            RegisterID::BC => self.bc = nn,
+            RegisterID::DE => self.de = nn,
+            RegisterID::HL => self.hl = nn,
+            RegisterID::SP => self.sp = nn,
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r }),
+        }
+        Ok(())
+    }
+
+    fn load_immediate8(&mut self, r: RegisterID, n: u8) -> Result<(), CpuError> {
+        self.pc -= 2;
+
+        match r {
+            RegisterID::A => {
+                self.af |= 0xff00;
+                self.af &= (n as u16) << 8;
+            }
+            RegisterID::B => {
+                self.bc |= 0xff00;
+                self.bc &= (n as u16) << 8;
+            }
+            RegisterID::C => {
+                self.bc |= 0x00ff;
+                self.bc &= n as u16;
+            }
+            RegisterID::D => {
+                self.de |= 0xff00;
+                self.de &= (n as u16) << 8;
+            }
+            RegisterID::E => {
+                self.de |= 0x00ff;
+                self.de &= n as u16;
+            }
+            RegisterID::H => {
+                self.hl |= 0xff00;
+                self.hl &= (n as u16) << 8;
+            }
+            RegisterID::L => {
+                self.hl |= 0x00ff;
+                self.hl &= n as u16;
+            }
+            RegisterID::HL => {
+                self.hl = n as u16;
+            }
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r }),
+        }
+
+        Ok(())
+    }
+
+    fn load_sp_to_hl_with_offset(&mut self, mem: &Memory, d: i8) -> Result<(), CpuError> {
+        let index = ((self.sp as i32) + (d as i32)) as usize;
+        if index > 0xffff {
+            return Err(CpuError::IndexOutOfBounds { index });
+        }
+
+        self.hl = mem[index] as u16;
+
+        Ok(())
+    }
+
+    fn load_ff00_plus_n(&mut self, mem: &Memory, n: u8) {
+        self.af |= 0xff00;
+        self.af &= mem[(0xff00) + (n as usize)] as u16;
+    }
+
+    fn load_ff00_plus_c(&mut self, mem: &Memory) {
+        self.af |= 0xff00;
+        self.af &= mem[(0xff00) + Self::lo_byte(self.bc) as usize] as u16;
     }
 }

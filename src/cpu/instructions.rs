@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RegisterID {
     AF,
     BC,
@@ -49,6 +50,7 @@ impl RegisterID {
         }
     }
 }
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum FlagID {
     NZ,
     Z,
@@ -75,10 +77,10 @@ pub enum Instruction {
 
     Load16 { r: RegisterID, nn: u16 },
     Load8 { r: RegisterID, n: u8 },
-    LoadFF00Plus { r: RegisterID, n: u8 },
     LoadReg { r1: RegisterID, r2: RegisterID },
     LoadSPToHLWithOffset { d: i8 },
-    LoadFF00PlusC, // LD A, (0xFF00+C)
+    LoadFF00PlusC,                   // LD A, (0xFF00+C)
+    LoadFF00PlusImmediate { n: u8 }, // LD A, (0xFF00+n)
 
     StoreFF00Plus { r: RegisterID, n: u8 },
     StoreReg { r1: RegisterID, loc: u16 },
@@ -393,8 +395,7 @@ impl Instruction {
                     r: RegisterID::SP,
                     d: Self::second_byte(bytes) as i8,
                 },
-                6 => Instruction::LoadFF00Plus {
-                    r: RegisterID::A,
+                6 => Instruction::LoadFF00PlusImmediate {
                     n: Self::second_byte(bytes),
                 },
                 7 | _ => Instruction::LoadSPToHLWithOffset {
