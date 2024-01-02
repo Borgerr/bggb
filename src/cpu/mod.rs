@@ -8,6 +8,7 @@ pub enum CpuError {
     FetchError { pc: u16 },
     IllegalInstruction { pc: u16 },
     ReadingIntoInvalidReg { r: RegisterID, pc: u16 },
+    ReadingFromInvalidReg { r: RegisterID, pc: u16 },
     IndexOutOfBounds { index: usize, pc: u16 },
 }
 
@@ -44,6 +45,25 @@ impl CPU {
             RegisterID::H => Self::hi_byte(self.hl) as u16,
             RegisterID::L => Self::lo_byte(self.hl) as u16,
         }
+    }
+
+    fn registerid_to_u8(&mut self, r: RegisterID) -> Result<u8, CpuError> {
+        let result = match r {
+            RegisterID::A => Self::hi_byte(self.af),
+            RegisterID::B => Self::hi_byte(self.bc),
+            RegisterID::C => Self::lo_byte(self.bc),
+            RegisterID::D => Self::hi_byte(self.de),
+            RegisterID::E => Self::lo_byte(self.de),
+            RegisterID::H => Self::hi_byte(self.hl),
+            RegisterID::L => Self::lo_byte(self.hl),
+
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc - 1 }),
+            // so far this error is only for fetching from 8bit registers, which is 1 byte long
+            // so the pc is decremented only by 1
+            // can possibly adjust this later
+        };
+
+        Ok(result)
     }
 
     pub fn fetch_decode_execute(&mut self, mem: &Memory) -> Result<(), CpuError> {
@@ -291,6 +311,52 @@ impl CPU {
                     r: r1,
                     pc: self.pc - 1,
                 });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn load_registers8(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
+        self.pc -= 3;
+
+        let new_val = self.registerid_to_u8(r2)?;
+        match r1 {
+            RegisterID::A => {
+                self.af |= 0xff00;
+                self.af &= (new_val as u16) << 8;
+            }
+            RegisterID::B => {
+                self.bc |= 0xff00;
+                self.bc &= (new_val as u16) << 8;
+            }
+            RegisterID::C => {
+                self.bc |= 0x00ff;
+                self.bc &= new_val as u16;
+            }
+            RegisterID::D => {
+                self.de |= 0xff00;
+                self.de &= (new_val as u16) << 8;
+            }
+            RegisterID::E => {
+                self.de |= 0x00ff;
+                self.de &= new_val as u16;
+            }
+            RegisterID::H => {
+                self.hl |= 0xff00;
+                self.hl &= (new_val as u16) << 8;
+            }
+            RegisterID::L => {
+                self.hl |= 0x00ff;
+                self.hl &= new_val as u16;
+            }
+            RegisterID::HL => self.hl = new_val as u16,
+
+            _ => {
+                return Err(CpuError::ReadingIntoInvalidReg {
+                    r: r1,
+                    pc: self.pc - 1,
+                })
             }
         }
 
