@@ -77,7 +77,8 @@ pub enum Instruction {
 
     Load16 { r: RegisterID, nn: u16 },
     Load8 { r: RegisterID, n: u8 },
-    LoadReg { r1: RegisterID, r2: RegisterID },
+    LoadReg16 { r1: RegisterID, r2: RegisterID },
+    LoadReg8 { r1: RegisterID, r2: RegisterID },
     LoadSPToHLWithOffset { d: i8 },
     LoadFF00PlusC,                   // LD A, (0xFF00+C)
     LoadFF00PlusImmediate { n: u8 }, // LD A, (0xFF00+n)
@@ -274,38 +275,38 @@ impl Instruction {
             2 => {
                 if q {
                     match p {
-                        0 => Instruction::LoadReg {
+                        0 => Instruction::LoadReg16 {
                             r1: RegisterID::A,
                             r2: RegisterID::BC,
                         },
-                        1 => Instruction::LoadReg {
+                        1 => Instruction::LoadReg16 {
                             r1: RegisterID::A,
-                            r2: RegisterID::BC,
+                            r2: RegisterID::DE,
                         },
-                        2 => Instruction::LoadReg {
+                        2 => Instruction::LoadReg16 {
                             r1: RegisterID::A,
                             r2: RegisterID::HLplus,
                         },
-                        3 | _ => Instruction::LoadReg {
+                        3 | _ => Instruction::LoadReg16 {
                             r1: RegisterID::A,
                             r2: RegisterID::HLminus,
                         },
                     }
                 } else {
                     match p {
-                        0 => Instruction::LoadReg {
+                        0 => Instruction::LoadReg16 {
                             r1: RegisterID::BC,
                             r2: RegisterID::A,
                         },
-                        1 => Instruction::LoadReg {
+                        1 => Instruction::LoadReg16 {
                             r1: RegisterID::DE,
                             r2: RegisterID::A,
                         },
-                        2 => Instruction::LoadReg {
+                        2 => Instruction::LoadReg16 {
                             r1: RegisterID::HLplus,
                             r2: RegisterID::A,
                         },
-                        3 | _ => Instruction::LoadReg {
+                        3 | _ => Instruction::LoadReg16 {
                             r1: RegisterID::HLminus,
                             r2: RegisterID::A,
                         },
@@ -354,7 +355,7 @@ impl Instruction {
             Instruction::HALT
         } else {
             // LD r[y], r[z]
-            Instruction::LoadReg {
+            Instruction::LoadReg8 {
                 r1: RegisterID::r_lookup(y),
                 r2: RegisterID::r_lookup(z),
             }
@@ -408,7 +409,7 @@ impl Instruction {
                         0 => Instruction::RETNoParam,
                         1 => Instruction::RETI,
                         2 => Instruction::JumpToHL,
-                        3 | _ => Instruction::LoadReg {
+                        3 | _ => Instruction::LoadReg16 {
                             r1: RegisterID::SP,
                             r2: RegisterID::HL,
                         },

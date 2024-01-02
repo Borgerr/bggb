@@ -7,8 +7,8 @@ use crate::memory::Memory;
 pub enum CpuError {
     FetchError { pc: u16 },
     IllegalInstruction { pc: u16 },
-    ReadingIntoInvalidReg { r: RegisterID },
-    IndexOutOfBounds { index: usize },
+    ReadingIntoInvalidReg { r: RegisterID, pc: u16 },
+    IndexOutOfBounds { index: usize, pc: u16 },
 }
 
 struct CPU {
@@ -26,6 +26,24 @@ impl CPU {
     }
     fn lo_byte(x: u16) -> u8 {
         (x & 0xff) as u8
+    }
+
+    fn registerid_to_u16(&mut self, r: RegisterID) -> u16 {
+        match r {
+            RegisterID::AF => self.af,
+            RegisterID::BC => self.bc,
+            RegisterID::DE => self.de,
+            RegisterID::HL | RegisterID::HLplus | RegisterID::HLminus => self.hl,
+            RegisterID::SP => self.sp,
+
+            RegisterID::A => Self::hi_byte(self.af) as u16,
+            RegisterID::B => Self::hi_byte(self.bc) as u16,
+            RegisterID::C => Self::lo_byte(self.bc) as u16,
+            RegisterID::D => Self::hi_byte(self.de) as u16,
+            RegisterID::E => Self::lo_byte(self.de) as u16,
+            RegisterID::H => Self::hi_byte(self.hl) as u16,
+            RegisterID::L => Self::lo_byte(self.hl) as u16,
+        }
     }
 
     pub fn fetch_decode_execute(&mut self, mem: &Memory) -> Result<(), CpuError> {
@@ -64,7 +82,8 @@ impl CPU {
             Instruction::Load16 { r, nn } => self.load_immediate16(r, nn)?,
             Instruction::Load8 { r, n } => self.load_immediate8(r, n)?,
             Instruction::LoadFF00PlusImmediate { n } => self.load_ff00_plus_n(mem, n),
-            Instruction::LoadReg { r1, r2 } => {}
+            Instruction::LoadReg16 { r1, r2 } => self.load_registers16(r1, r2)?,
+            Instruction::LoadReg8 { r1, r2 } => {}
             Instruction::LoadSPToHLWithOffset { d } => self.load_sp_to_hl_with_offset(mem, d)?,
             Instruction::LoadFF00PlusC => self.load_ff00_plus_c(mem),
 
@@ -162,7 +181,7 @@ impl CPU {
             RegisterID::DE => self.de = nn,
             RegisterID::HL => self.hl = nn,
             RegisterID::SP => self.sp = nn,
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r }),
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc - 3 }),
         }
         Ok(())
     }
@@ -202,7 +221,7 @@ impl CPU {
             RegisterID::HL => {
                 self.hl = n as u16;
             }
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r }),
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc - 2 }),
         }
 
         Ok(())
@@ -213,7 +232,10 @@ impl CPU {
 
         let index = ((self.sp as i32) + (d as i32)) as usize;
         if index > 0xffff {
-            return Err(CpuError::IndexOutOfBounds { index });
+            return Err(CpuError::IndexOutOfBounds {
+                index,
+                pc: self.pc - 2,
+            });
         }
 
         self.hl = mem[index] as u16;
@@ -233,5 +255,45 @@ impl CPU {
 
         self.af |= 0xff00;
         self.af &= mem[(0xff00) + Self::lo_byte(self.bc) as usize] as u16;
+    }
+
+    fn load_registers16(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
+        self.pc -= 3;
+
+        match r1 {
+            RegisterID::SP => self.sp = self.registerid_to_u16(r2),
+            RegisterID::A => match r2 {
+                // special cases when HLplus or HLminus; doesn't apply to others
+                // as those instructions don't exist
+                RegisterID::HLplus => {
+                    self.af = self.registerid_to_u16(r2);
+                    self.hl += 1;
+                }
+                RegisterID::HLminus => {
+                    self.af = self.registerid_to_u16(r2);
+                    self.hl -= 1;
+                }
+                _ => (),
+            },
+            RegisterID::BC => self.bc = self.registerid_to_u16(r2),
+            RegisterID::DE => self.de = self.registerid_to_u16(r2),
+            RegisterID::HLplus => {
+                self.hl = self.registerid_to_u16(r2);
+                self.hl += 1;
+            }
+            RegisterID::HLminus => {
+                self.hl = self.registerid_to_u16(r2);
+                self.hl -= 1;
+            }
+
+            _ => {
+                return Err(CpuError::ReadingIntoInvalidReg {
+                    r: r1,
+                    pc: self.pc - 1,
+                });
+            }
+        }
+
+        Ok(())
     }
 }
