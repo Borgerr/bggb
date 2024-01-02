@@ -103,7 +103,7 @@ impl CPU {
             Instruction::Load8 { r, n } => self.load_immediate8(r, n)?,
             Instruction::LoadFF00PlusImmediate { n } => self.load_ff00_plus_n(mem, n),
             Instruction::LoadReg16 { r1, r2 } => self.load_registers16(r1, r2)?,
-            Instruction::LoadReg8 { r1, r2 } => {}
+            Instruction::LoadReg8 { r1, r2 } => self.load_registers8(r1, r2)?,
             Instruction::LoadSPToHLWithOffset { d } => self.load_sp_to_hl_with_offset(mem, d)?,
             Instruction::LoadFF00PlusC => self.load_ff00_plus_c(mem),
 
