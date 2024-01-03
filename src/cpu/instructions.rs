@@ -168,14 +168,10 @@ impl Instruction {
     fn third_byte(bytes: u32) -> u8 {
         ((bytes >> 8) & 0xff) as u8
     }
-    fn fourth_byte(bytes: u32) -> u8 {
-        (bytes & 0xff) as u8
-    }
-    fn third_and_fourth_bytes(bytes: u32) -> u16 {
-        (bytes & 0xffff) as u16
-    }
-    fn second_and_third_bytes(bytes: u32) -> u16 {
-        ((bytes >> 8) & 0xffff) as u16
+    fn second_and_third_bytes_reversed(bytes: u32) -> u16 {
+        let hi = ((bytes >> 16) & 0xff) as u16;
+        let lo = ((bytes >> 8) & 0xff) as u16;
+        (lo << 8) & hi
     }
 
     // "x", "y", "z", "p", and "q" below are referencing the following document:
@@ -268,7 +264,7 @@ impl Instruction {
                 } else {
                     Instruction::Load16 {
                         r: RegisterID::rp_lookup(p),
-                        nn: Self::second_and_third_bytes(bytes),
+                        nn: Self::second_and_third_bytes_reversed(bytes),
                     }
                 }
             }
@@ -424,7 +420,7 @@ impl Instruction {
                 match y {
                     0 | 1 | 2 | 3 => Instruction::JumpConditional {
                         f: FlagID::cc_lookup(y),
-                        nn: Self::second_and_third_bytes(bytes),
+                        nn: Self::second_and_third_bytes_reversed(bytes),
                     },
                     4 => {
                         // LD (0xFF00+C), A
@@ -433,7 +429,7 @@ impl Instruction {
                     5 => {
                         // LD (nn), A
                         Instruction::StoreImmediate {
-                            loc: Self::second_and_third_bytes(bytes),
+                            loc: Self::second_and_third_bytes_reversed(bytes),
                         }
                     }
                     6 => {
@@ -444,7 +440,7 @@ impl Instruction {
                         // LD A, (nn)
                         Instruction::Load16 {
                             r: RegisterID::A,
-                            nn: Self::second_and_third_bytes(bytes),
+                            nn: Self::second_and_third_bytes_reversed(bytes),
                         }
                     }
                 }
@@ -452,7 +448,7 @@ impl Instruction {
             3 => {
                 match y {
                     0 => Instruction::Jump {
-                        nn: Self::second_and_third_bytes(bytes),
+                        nn: Self::second_and_third_bytes_reversed(bytes),
                     }, /*
                     1 => {
                     // CB prefix, never encountered.
@@ -466,7 +462,7 @@ impl Instruction {
             4 => match y {
                 0 | 1 | 2 | 3 => Instruction::CallConditional {
                     f: FlagID::cc_lookup(y),
-                    nn: Self::second_and_third_bytes(bytes),
+                    nn: Self::second_and_third_bytes_reversed(bytes),
                 },
                 4 | 5 | 6 | 7 | _ => Instruction::ILLEGAL,
             },
@@ -474,7 +470,7 @@ impl Instruction {
                 if q {
                     match p {
                         0 => Instruction::Call {
-                            nn: Self::second_and_third_bytes(bytes),
+                            nn: Self::second_and_third_bytes_reversed(bytes),
                         },
                         1 | 2 | 3 | _ => Instruction::ILLEGAL,
                     }
