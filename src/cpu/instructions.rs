@@ -243,7 +243,7 @@ impl Instruction {
                 0 => Instruction::NOP,
                 1 => Instruction::StoreReg {
                     r1: RegisterID::SP,
-                    loc: Self::second_and_third_bytes(bytes),
+                    loc: Self::second_and_third_bytes_reversed(bytes),
                 },
 
                 2 => Instruction::STOP,
