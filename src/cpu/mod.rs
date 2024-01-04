@@ -57,17 +57,14 @@ impl CPU {
             RegisterID::H => Self::hi_byte(self.hl),
             RegisterID::L => Self::lo_byte(self.hl),
 
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc - 1 }),
-            // so far this error is only for fetching from 8bit registers, which is 1 byte long
-            // so the pc is decremented only by 1
-            // can possibly adjust this later
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
         };
 
         Ok(result)
     }
 
     pub fn fetch_decode_execute(&mut self, mem: &Memory) -> Result<(), CpuError> {
-        let bytes = self.fetch_pc_u32(mem)?;
+        let bytes = self.fetch_instr_u32(mem)?;
         let instr = Instruction::from_bytes(bytes);
         self.execute(instr, mem)?;
 
@@ -84,102 +81,132 @@ impl CPU {
             result
         }
     }
-    fn fetch_pc_u32(&mut self, mem: &Memory) -> Result<u32, CpuError> {
+    fn fetch_instr_u32(&mut self, mem: &Memory) -> Result<u32, CpuError> {
+        // always increments program counter by 3
         Ok(((self.fetch_pc_u8(mem)? as u32) << 24)
             | ((self.fetch_pc_u8(mem)? as u32) << 16)
-            | ((self.fetch_pc_u8(mem)? as u32) << 8)
-            | (self.fetch_pc_u8(mem)?) as u32)
+            | ((self.fetch_pc_u8(mem)? as u32) << 8))
     }
 
     fn execute(&mut self, instr: Instruction, mem: &Memory) -> Result<(), CpuError> {
-        // remember if the instruction ends up being short, like NOP, reduce the program counter again
+        // This function is kind of smelly since it decreases the program counter after determining the instruction
+        // but the motivation is that instructions should store data critical to the operation,
+        // and do that in one call to `Instruction::from_bytes`.
+        // The other alternative would be to repeatedly call that, and lose information within the opcodes themselves
         match instr {
-            Instruction::NOP => {}
-            Instruction::STOP => {}
-            Instruction::HALT => {}
-            Instruction::ILLEGAL => return Err(CpuError::IllegalInstruction { pc: self.pc - 4 }),
+            Instruction::NOP => self.pc -= 2,
+            Instruction::STOP => self.pc -= 2,
+            Instruction::HALT => self.pc -= 1,
+            Instruction::ILLEGAL => {
+                self.pc -= 3;
+                return Err(CpuError::IllegalInstruction { pc: self.pc });
+            }
 
-            Instruction::Load16 { r, nn } => self.load_immediate16(r, nn)?,
-            Instruction::Load8 { r, n } => self.load_immediate8(r, n)?,
-            Instruction::LoadFF00PlusImmediate { n } => self.load_ff00_plus_n(mem, n),
-            Instruction::LoadReg16 { r1, r2 } => self.load_registers16(r1, r2)?,
-            Instruction::LoadReg8 { r1, r2 } => self.load_registers8(r1, r2)?,
-            Instruction::LoadSPToHLWithOffset { d } => self.load_sp_to_hl_with_offset(mem, d)?,
-            Instruction::LoadFF00PlusC => self.load_ff00_plus_c(mem),
+            Instruction::Load16 { r, nn } => {
+                self.pc -= 0;
+                self.load_immediate16(r, nn)?;
+            }
+            Instruction::Load8 { r, n } => {
+                self.pc -= 1;
+                self.load_immediate8(r, n)?;
+            }
+            Instruction::LoadFF00PlusImmediate { n } => {
+                self.pc -= 1;
+                self.load_ff00_plus_n(mem, n);
+            }
+            Instruction::LoadReg16 { r1, r2 } => {
+                self.pc -= 2;
+                self.load_registers16(r1, r2)?;
+            }
+            Instruction::LoadReg8 { r1, r2 } => {
+                self.pc -= 2;
+                self.load_registers8(r1, r2)?;
+            }
+            Instruction::LoadSPToHLWithOffset { d } => {
+                self.pc -= 1;
+                self.load_sp_to_hl_with_offset(mem, d)?;
+            }
+            Instruction::LoadFF00PlusC => {
+                self.pc -= 2;
+                self.load_ff00_plus_c(mem);
+            }
 
-            Instruction::StoreFF00Plus { r, n } => {}
-            Instruction::StoreReg { r1, loc } => {}
-            Instruction::StoreImmediate { loc } => {}
-            Instruction::StoreFF00PlusC => {}
+            Instruction::StoreFF00Plus { r, n } => self.pc -= 1,
+            Instruction::StoreReg { r1, loc } => self.pc -= 0,
+            Instruction::StoreImmediate { loc } => self.pc -= 0,
+            Instruction::StoreFF00PlusC => self.pc -= 2,
 
+            // really no need to change the program counter prior to jump
             Instruction::Jump { nn } => self.jump(nn),
             Instruction::JumpConditional { f, nn } => {}
             Instruction::JR { d } => {}
             Instruction::JumpRegConditional { f, d } => {}
             Instruction::JumpToHL => {}
 
-            Instruction::RLC { r } => {}
-            Instruction::RRC { r } => {}
-            Instruction::RL { r } => {}
-            Instruction::RR { r } => {}
-            Instruction::SLA { r } => {}
-            Instruction::SRA { r } => {}
-            Instruction::SWAP { r } => {}
-            Instruction::SRL { r } => {}
+            // CB-prefixed
+            Instruction::RLC { r } => self.pc -= 1,
+            Instruction::RRC { r } => self.pc -= 1,
+            Instruction::RL { r } => self.pc -= 1,
+            Instruction::RR { r } => self.pc -= 1,
+            Instruction::SLA { r } => self.pc -= 1,
+            Instruction::SRA { r } => self.pc -= 1,
+            Instruction::SWAP { r } => self.pc -= 1,
+            Instruction::SRL { r } => self.pc -= 1,
 
-            Instruction::BIT { y, r } => {}
-            Instruction::RES { y, r } => {}
-            Instruction::SET { y, r } => {}
+            // also CB-prefixed (y is included in opcode)
+            Instruction::BIT { y, r } => self.pc -= 1,
+            Instruction::RES { y, r } => self.pc -= 1,
+            Instruction::SET { y, r } => self.pc -= 1,
 
-            Instruction::AddRegisters { r1, r2 } => {}
-            Instruction::AddSigned { r, d } => {}
+            Instruction::AddRegisters { r1, r2 } => self.pc -= 2,
+            Instruction::AddSigned { r, d } => self.pc -= 1,
 
-            Instruction::DEC { r } => {}
-            Instruction::INC { r } => {}
+            Instruction::DEC { r } => self.pc -= 2,
+            Instruction::INC { r } => self.pc -= 2,
 
-            Instruction::RLCA => {}
-            Instruction::RRCA => {}
-            Instruction::RLA => {}
-            Instruction::RRA => {}
-            Instruction::DAA => {}
-            Instruction::CPL => {}
-            Instruction::SCF => {}
-            Instruction::CCF => {}
+            Instruction::RLCA => self.pc -= 2,
+            Instruction::RRCA => self.pc -= 2,
+            Instruction::RLA => self.pc -= 2,
+            Instruction::RRA => self.pc -= 2,
+            Instruction::DAA => self.pc -= 2,
+            Instruction::CPL => self.pc -= 2,
+            Instruction::SCF => self.pc -= 2,
+            Instruction::CCF => self.pc -= 2,
 
-            Instruction::RET { f } => {}
+            Instruction::RET { f } => self.pc -= 2,
 
-            Instruction::RETNoParam => {}
-            Instruction::RETI => {}
+            Instruction::RETNoParam => self.pc -= 2,
+            Instruction::RETI => self.pc -= 2,
 
-            Instruction::POP { r } => {}
+            Instruction::POP { r } => self.pc -= 2,
 
-            Instruction::DI => {}
-            Instruction::EI => {}
+            Instruction::DI => self.pc -= 2,
+            Instruction::EI => self.pc -= 2,
 
-            Instruction::CallConditional { f, nn } => {}
-            Instruction::Call { nn } => {}
+            Instruction::CallConditional { f, nn } => self.pc -= 0,
+            Instruction::Call { nn } => self.pc -= 0,
 
-            Instruction::PUSH { r } => {}
+            Instruction::PUSH { r } => self.pc -= 2,
 
-            Instruction::RST { arg } => {}
+            Instruction::RST { arg } => self.pc -= 2, // "arg" is included in opcode
 
-            Instruction::AddImmediate { n } => {}
-            Instruction::AdcImmediate { n } => {}
-            Instruction::SubImmediate { n } => {}
-            Instruction::SbcImmediate { n } => {}
-            Instruction::AndImmediate { n } => {}
-            Instruction::XorImmediate { n } => {}
-            Instruction::OrImmediate { n } => {}
-            Instruction::CpImmediate { n } => {}
+            Instruction::AddImmediate { n } => self.pc -= 1,
+            Instruction::AdcImmediate { n } => self.pc -= 1,
+            Instruction::SubImmediate { n } => self.pc -= 1,
+            Instruction::SbcImmediate { n } => self.pc -= 1,
+            Instruction::AndImmediate { n } => self.pc -= 1,
+            Instruction::XorImmediate { n } => self.pc -= 1,
+            Instruction::OrImmediate { n } => self.pc -= 1,
+            Instruction::CpImmediate { n } => self.pc -= 1,
 
-            Instruction::AddRegister { r } => {}
-            Instruction::AdcRegister { r } => {}
-            Instruction::SubRegister { r } => {}
-            Instruction::SbcRegister { r } => {}
-            Instruction::AndRegister { r } => {}
-            Instruction::XorRegister { r } => {}
-            Instruction::OrRegister { r } => {}
-            Instruction::CpRegister { r } => {}
+            Instruction::AddRegister { r } => self.pc -= 2,
+            Instruction::AdcRegister { r } => self.pc -= 2,
+            Instruction::SubRegister { r } => self.pc -= 2,
+            Instruction::SbcRegister { r } => self.pc -= 2,
+            Instruction::AndRegister { r } => self.pc -= 2,
+            Instruction::XorRegister { r } => self.pc -= 2,
+            Instruction::OrRegister { r } => self.pc -= 2,
+            Instruction::CpRegister { r } => self.pc -= 2,
         }
 
         Ok(())
@@ -193,8 +220,6 @@ impl CPU {
     }
 
     fn load_immediate16(&mut self, r: RegisterID, nn: u16) -> Result<(), CpuError> {
-        self.pc -= 1; // instruction has 3 bytes
-
         match r {
             RegisterID::AF => self.af = nn,
             RegisterID::BC => self.bc = nn,
@@ -207,8 +232,6 @@ impl CPU {
     }
 
     fn load_immediate8(&mut self, r: RegisterID, n: u8) -> Result<(), CpuError> {
-        self.pc -= 2;
-
         match r {
             RegisterID::A => {
                 self.af |= 0xff00;
@@ -248,8 +271,6 @@ impl CPU {
     }
 
     fn load_sp_to_hl_with_offset(&mut self, mem: &Memory, d: i8) -> Result<(), CpuError> {
-        self.pc -= 2;
-
         let index = ((self.sp as i32) + (d as i32)) as usize;
         if index > 0xffff {
             return Err(CpuError::IndexOutOfBounds {
@@ -264,22 +285,16 @@ impl CPU {
     }
 
     fn load_ff00_plus_n(&mut self, mem: &Memory, n: u8) {
-        self.pc -= 2;
-
         self.af |= 0xff00;
         self.af &= mem[(0xff00) + (n as usize)] as u16;
     }
 
     fn load_ff00_plus_c(&mut self, mem: &Memory) {
-        self.pc -= 3;
-
         self.af |= 0xff00;
         self.af &= mem[(0xff00) + Self::lo_byte(self.bc) as usize] as u16;
     }
 
     fn load_registers16(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
-        self.pc -= 3;
-
         match r1 {
             RegisterID::SP => self.sp = self.registerid_to_u16(r2),
             RegisterID::A => match r2 {
@@ -318,8 +333,6 @@ impl CPU {
     }
 
     fn load_registers8(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
-        self.pc -= 3;
-
         let new_val = self.registerid_to_u8(r2)?;
         match r1 {
             RegisterID::A => {
