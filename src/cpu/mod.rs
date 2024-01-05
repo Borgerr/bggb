@@ -254,9 +254,18 @@ impl CPU {
                 self.pc -= 1;
                 self.sbc_immediate(n);
             }
-            Instruction::AndImmediate { n } => self.pc -= 1,
-            Instruction::XorImmediate { n } => self.pc -= 1,
-            Instruction::OrImmediate { n } => self.pc -= 1,
+            Instruction::AndImmediate { n } => {
+                self.pc -= 1;
+                self.and_immediate(n);
+            }
+            Instruction::XorImmediate { n } => {
+                self.pc -= 1;
+                self.xor_immediate(n);
+            }
+            Instruction::OrImmediate { n } => {
+                self.pc -= 1;
+                self.or_immediate(n);
+            }
             Instruction::CpImmediate { n } => self.pc -= 1,
 
             Instruction::AddRegister { r } => self.pc -= 2,
@@ -565,6 +574,48 @@ impl CPU {
             self.af &= 0x00ff;
             self.af |= (result as u16) << 8;
         }
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+
+    fn and_immediate(&mut self, n: u8) {
+        let a = hi_byte(self.af);
+        let result = a & n;
+
+        self.af &= 0x00ff;
+        self.af |= (result as u16) << 8;
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+
+    fn xor_immediate(&mut self, n: u8) {
+        let a = hi_byte(self.af);
+        let result = a ^ n;
+
+        self.af &= 0x00ff;
+        self.af |= (result as u16) << 8;
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+
+    fn or_immediate(&mut self, n: u8) {
+        let a = hi_byte(self.af);
+        let result = a | n;
+
+        self.af &= 0x00ff;
+        self.af |= (result as u16) << 8;
 
         if result == 0 {
             self.set_zero_flag_on();
