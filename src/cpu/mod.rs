@@ -26,6 +26,13 @@ fn nc_flag(af: u16) -> bool {
     !c_flag(af)
 }
 
+fn hi_byte(x: u16) -> u8 {
+    (x >> 8) as u8
+}
+fn lo_byte(x: u16) -> u8 {
+    (x & 0xff) as u8
+}
+
 struct CPU {
     af: u16, // accumulator & flags
     bc: u16, // BC register
@@ -38,11 +45,26 @@ struct CPU {
 }
 
 impl CPU {
-    fn hi_byte(x: u16) -> u8 {
-        (x >> 8) as u8
+    fn set_carry_flag_on(&mut self) {
+        let flags = lo_byte(self.af) | 0b1000;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
     }
-    fn lo_byte(x: u16) -> u8 {
-        (x & 0xff) as u8
+    fn set_carry_flag_off(&mut self) {
+        let flags = lo_byte(self.af) & 0b0111;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+
+    fn set_zero_flag_on(&mut self) {
+        let flags = lo_byte(self.af) | 0b1000000;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+    fn set_zero_flag_off(&mut self) {
+        let flags = lo_byte(self.af) | 0b0111111;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
     }
 
     fn registerid_to_u16(&mut self, r: RegisterID) -> u16 {
@@ -53,25 +75,25 @@ impl CPU {
             RegisterID::HL | RegisterID::HLplus | RegisterID::HLminus => self.hl,
             RegisterID::SP => self.sp,
 
-            RegisterID::A => Self::hi_byte(self.af) as u16,
-            RegisterID::B => Self::hi_byte(self.bc) as u16,
-            RegisterID::C => Self::lo_byte(self.bc) as u16,
-            RegisterID::D => Self::hi_byte(self.de) as u16,
-            RegisterID::E => Self::lo_byte(self.de) as u16,
-            RegisterID::H => Self::hi_byte(self.hl) as u16,
-            RegisterID::L => Self::lo_byte(self.hl) as u16,
+            RegisterID::A => hi_byte(self.af) as u16,
+            RegisterID::B => hi_byte(self.bc) as u16,
+            RegisterID::C => lo_byte(self.bc) as u16,
+            RegisterID::D => hi_byte(self.de) as u16,
+            RegisterID::E => lo_byte(self.de) as u16,
+            RegisterID::H => hi_byte(self.hl) as u16,
+            RegisterID::L => lo_byte(self.hl) as u16,
         }
     }
 
     fn registerid_to_u8(&mut self, r: RegisterID) -> Result<u8, CpuError> {
         let result = match r {
-            RegisterID::A => Self::hi_byte(self.af),
-            RegisterID::B => Self::hi_byte(self.bc),
-            RegisterID::C => Self::lo_byte(self.bc),
-            RegisterID::D => Self::hi_byte(self.de),
-            RegisterID::E => Self::lo_byte(self.de),
-            RegisterID::H => Self::hi_byte(self.hl),
-            RegisterID::L => Self::lo_byte(self.hl),
+            RegisterID::A => hi_byte(self.af),
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
 
             _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
         };
@@ -111,6 +133,8 @@ impl CPU {
         // The other alternative would be to repeatedly call that
         // and potentially lose information within the opcodes themselves
         match instr {
+            // TODO: within each instruction's respective method,
+            // involve flag changing
             Instruction::NOP => self.pc -= 2, // no operation
             Instruction::ILLEGAL => {
                 self.pc -= 3;
@@ -214,10 +238,22 @@ impl CPU {
 
             Instruction::RST { arg } => self.pc -= 2, // "arg" is included in opcode
 
-            Instruction::AddImmediate { n } => self.pc -= 1,
-            Instruction::AdcImmediate { n } => self.pc -= 1,
-            Instruction::SubImmediate { n } => self.pc -= 1,
-            Instruction::SbcImmediate { n } => self.pc -= 1,
+            Instruction::AddImmediate { n } => {
+                self.pc -= 1;
+                self.add_immediate(n);
+            }
+            Instruction::AdcImmediate { n } => {
+                self.pc -= 1;
+                self.adc_immediate(n);
+            }
+            Instruction::SubImmediate { n } => {
+                self.pc -= 1;
+                self.sub_immediate(n);
+            }
+            Instruction::SbcImmediate { n } => {
+                self.pc -= 1;
+                self.sbc_immediate(n);
+            }
             Instruction::AndImmediate { n } => self.pc -= 1,
             Instruction::XorImmediate { n } => self.pc -= 1,
             Instruction::OrImmediate { n } => self.pc -= 1,
@@ -347,7 +383,7 @@ impl CPU {
 
     fn load_ff00_plus_c(&mut self, mem: &Memory) {
         self.af |= 0xff00;
-        self.af &= mem[(0xff00) + Self::lo_byte(self.bc) as usize] as u16;
+        self.af &= mem[(0xff00) + lo_byte(self.bc) as usize] as u16;
     }
 
     fn load_registers16(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
@@ -437,5 +473,103 @@ impl CPU {
     }
     fn disable_interrupts(&mut self) {
         self.interrupts_enabled = false;
+    }
+
+    fn add_immediate(&mut self, n: u8) {
+        let n = n as u16;
+        let a = hi_byte(self.af) as u16;
+        let mut result = n + a;
+
+        if result > 0xff {
+            result -= 0xff;
+            self.set_carry_flag_on();
+            self.af &= 0x00ff;
+            self.af |= result << 8;
+        } else {
+            self.set_carry_flag_off();
+            self.af &= 0x00ff;
+            self.af |= result << 8;
+        }
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+    fn adc_immediate(&mut self, n: u8) {
+        let n = n as u16;
+        let a = hi_byte(self.af) as u16;
+        let mut result = n + a;
+
+        if c_flag(self.af) {
+            result += 1;
+        }
+
+        if result > 0xff {
+            result -= 0xff;
+            self.set_carry_flag_on();
+            self.af &= 0x00ff;
+            self.af |= result << 8;
+        } else {
+            self.set_carry_flag_off();
+            self.af &= 0x00ff;
+            self.af |= result << 8;
+        }
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+
+    fn sub_immediate(&mut self, n: u8) {
+        let n = n as i16;
+        let a = hi_byte(self.af) as i16;
+        let mut result = a - n;
+
+        if result < 0 {
+            result += 0xff;
+            self.set_carry_flag_on();
+            self.af &= 0x00ff;
+            self.af |= (result as u16) << 8;
+        } else {
+            self.set_carry_flag_off();
+            self.af &= 0x00ff;
+            self.af |= (result as u16) << 8;
+        }
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
+    }
+    fn sbc_immediate(&mut self, n: u8) {
+        let n = n as i16;
+        let a = hi_byte(self.af) as i16;
+        let mut result = a - n;
+
+        if c_flag(self.af) {
+            result -= 1;
+        }
+
+        if result < 0 {
+            result += 0xff;
+            self.set_carry_flag_on();
+            self.af &= 0x00ff;
+            self.af |= (result as u16) << 8;
+        } else {
+            self.set_carry_flag_off();
+            self.af &= 0x00ff;
+            self.af |= (result as u16) << 8;
+        }
+
+        if result == 0 {
+            self.set_zero_flag_on();
+        } else {
+            self.set_zero_flag_off();
+        }
     }
 }
