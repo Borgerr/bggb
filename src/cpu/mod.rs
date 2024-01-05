@@ -12,6 +12,20 @@ pub enum CpuError {
     IndexOutOfBounds { index: usize, pc: u16 },
 }
 
+fn z_flag(af: u16) -> bool {
+    ((af >> 6) & 0b1) == 0b1
+}
+fn nz_flag(af: u16) -> bool {
+    !z_flag(af)
+}
+
+fn c_flag(af: u16) -> bool {
+    ((af >> 3) & 0b1) == 0b1
+}
+fn nc_flag(af: u16) -> bool {
+    !c_flag(af)
+}
+
 struct CPU {
     af: u16, // accumulator & flags
     bc: u16, // BC register
@@ -139,10 +153,10 @@ impl CPU {
 
             // really no need to change the program counter prior to jump
             Instruction::Jump { nn } => self.jump(nn),
-            Instruction::JumpConditional { f, nn } => {}
-            Instruction::JR { d } => {}
-            Instruction::JumpRegConditional { f, d } => {}
-            Instruction::JumpToHL => {}
+            Instruction::JumpConditional { f, nn } => self.jump_conditional(f, nn),
+            Instruction::JR { d } => self.jump_reg(d),
+            Instruction::JumpRegConditional { f, d } => self.jump_reg_conditional(f, d),
+            Instruction::JumpToHL => self.jump_to_hl(),
 
             // CB-prefixed
             Instruction::RLC { r } => self.pc -= 1,
@@ -227,6 +241,38 @@ impl CPU {
     */
     fn jump(&mut self, nn: u16) {
         self.pc = nn;
+    }
+
+    fn jump_to_hl(&mut self) {
+        self.pc = self.hl;
+    }
+
+    fn jump_conditional(&mut self, f: FlagID, nn: u16) {
+        if match f {
+            FlagID::C => c_flag(self.af),
+            FlagID::NC => nc_flag(self.af),
+            FlagID::Z => z_flag(self.af),
+            FlagID::NZ => nz_flag(self.af),
+        } {
+            self.pc = nn;
+        }
+    }
+
+    fn jump_reg(&mut self, d: i8) {
+        let new_pc = ((self.pc as i32) + (d as i32)) as u16;
+        self.pc = new_pc;
+    }
+
+    fn jump_reg_conditional(&mut self, f: FlagID, d: i8) {
+        if match f {
+            FlagID::C => c_flag(self.af),
+            FlagID::NC => nc_flag(self.af),
+            FlagID::Z => z_flag(self.af),
+            FlagID::NZ => nz_flag(self.af),
+        } {
+            let new_pc = ((self.pc as i32) + (d as i32)) as u16;
+            self.pc = new_pc;
+        }
     }
 
     fn load_immediate16(&mut self, r: RegisterID, nn: u16) -> Result<(), CpuError> {
