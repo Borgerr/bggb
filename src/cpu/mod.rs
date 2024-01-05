@@ -175,11 +175,14 @@ impl CPU {
             Instruction::StoreImmediate { loc } => self.pc -= 0,
             Instruction::StoreFF00PlusC => self.pc -= 2,
 
-            // really no need to change the program counter prior to jump
+            // really no need to change the program counter prior to some jumps
             Instruction::Jump { nn } => self.jump(nn),
             Instruction::JumpConditional { f, nn } => self.jump_conditional(f, nn),
             Instruction::JR { d } => self.jump_reg(d),
-            Instruction::JumpRegConditional { f, d } => self.jump_reg_conditional(f, d),
+            Instruction::JumpRegConditional { f, d } => {
+                self.pc -= 1;
+                self.jump_reg_conditional(f, d);
+            }
             Instruction::JumpToHL => self.jump_to_hl(),
 
             // CB-prefixed
