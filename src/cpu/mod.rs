@@ -19,6 +19,8 @@ struct CPU {
     hl: u16, // HL register
     sp: u16, // stack pointer
     pc: u16, // program counter/pointer
+
+    interrupts_enabled: bool,
 }
 
 impl CPU {
@@ -92,11 +94,10 @@ impl CPU {
         // This function is kind of smelly since it decreases the program counter after determining the instruction
         // but the motivation is that instructions should store data critical to the operation,
         // and do that in one call to `Instruction::from_bytes`.
-        // The other alternative would be to repeatedly call that, and lose information within the opcodes themselves
+        // The other alternative would be to repeatedly call that
+        // and potentially lose information within the opcodes themselves
         match instr {
-            Instruction::NOP => self.pc -= 2,
-            Instruction::STOP => self.pc -= 2,
-            Instruction::HALT => self.pc -= 1,
+            Instruction::NOP => self.pc -= 2, // no operation
             Instruction::ILLEGAL => {
                 self.pc -= 3;
                 return Err(CpuError::IllegalInstruction { pc: self.pc });
@@ -180,9 +181,18 @@ impl CPU {
 
             Instruction::POP { r } => self.pc -= 2,
 
-            Instruction::DI => self.pc -= 2,
-            Instruction::EI => self.pc -= 2,
-
+            // interrupts
+            Instruction::DI => {
+                self.pc -= 2;
+                self.disable_interrupts();
+            }
+            Instruction::EI => {
+                self.pc -= 2;
+                self.enable_interrupts();
+            }
+            Instruction::STOP => self.pc -= 2, // low power standby mode
+            Instruction::HALT => self.pc -= 1, // halt until interrupt occurs... somehow.
+            // TODO: research STOP and HALT instructions
             Instruction::CallConditional { f, nn } => self.pc -= 0,
             Instruction::Call { nn } => self.pc -= 0,
 
@@ -374,5 +384,12 @@ impl CPU {
         }
 
         Ok(())
+    }
+
+    fn enable_interrupts(&mut self) {
+        self.interrupts_enabled = true;
+    }
+    fn disable_interrupts(&mut self) {
+        self.interrupts_enabled = false;
     }
 }
