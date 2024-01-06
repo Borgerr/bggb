@@ -62,7 +62,7 @@ impl CPU {
         self.af |= flags as u16;
     }
     fn set_zero_flag_off(&mut self) {
-        let flags = lo_byte(self.af) | 0b0111111;
+        let flags = lo_byte(self.af) & 0b0111111;
         self.af &= 0xff00;
         self.af |= flags as u16;
     }
