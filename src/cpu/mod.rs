@@ -101,7 +101,7 @@ impl CPU {
         Ok(result)
     }
 
-    pub fn fetch_decode_execute(&mut self, mem: &Memory) -> Result<(), CpuError> {
+    pub fn fetch_decode_execute(&mut self, mem: &mut Memory) -> Result<(), CpuError> {
         let bytes = self.fetch_instr_u32(mem)?;
         let instr = Instruction::from_bytes(bytes);
         self.execute(instr, mem)?;
@@ -126,7 +126,7 @@ impl CPU {
             | ((self.fetch_pc_u8(mem)? as u32) << 8))
     }
 
-    fn execute(&mut self, instr: Instruction, mem: &Memory) -> Result<(), CpuError> {
+    fn execute(&mut self, instr: Instruction, mem: &mut Memory) -> Result<(), CpuError> {
         // This function is kind of smelly since it decreases the program counter after determining the instruction
         // but the motivation is that instructions should store data critical to the operation,
         // and do that in one call to `Instruction::from_bytes`.
@@ -147,7 +147,7 @@ impl CPU {
             }
             Instruction::Load8 { r, n } => {
                 self.pc -= 1;
-                self.load_immediate8(r, n)?;
+                self.load_immediate8(r, n, mem)?;
             }
             Instruction::LoadFF00PlusImmediate { n } => {
                 self.pc -= 1;
@@ -159,7 +159,7 @@ impl CPU {
             }
             Instruction::LoadReg8 { r1, r2 } => {
                 self.pc -= 2;
-                self.load_registers8(r1, r2)?;
+                self.load_registers8(r1, r2, mem)?;
             }
             Instruction::LoadSPToHLWithOffset { d } => {
                 self.pc -= 1;
@@ -335,7 +335,11 @@ impl CPU {
         Ok(())
     }
 
-    fn load_immediate8(&mut self, r: RegisterID, n: u8) -> Result<(), CpuError> {
+    fn load_immediate8(&mut self, r: RegisterID, n: u8, mem: &mut Memory) -> Result<(), CpuError> {
+        if let RegisterID::HL = r {
+            mem[self.hl as usize] = n;
+        }
+
         match r {
             RegisterID::A => {
                 self.af |= 0xff00;
@@ -436,8 +440,18 @@ impl CPU {
         Ok(())
     }
 
-    fn load_registers8(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
+    fn load_registers8(
+        &mut self,
+        r1: RegisterID,
+        r2: RegisterID,
+        mem: &mut Memory,
+    ) -> Result<(), CpuError> {
         let new_val = self.registerid_to_u8(r2)?;
+
+        if let RegisterID::HL = r1 {
+            mem[self.hl as usize] = new_val;
+        }
+
         match r1 {
             RegisterID::A => {
                 self.af |= 0xff00;
