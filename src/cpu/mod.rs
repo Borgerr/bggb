@@ -264,15 +264,15 @@ impl CPU {
             }
             Instruction::AndImmediate { n } => {
                 self.pc -= 1;
-                self.and_immediate(n);
+                self.logical_template(n, |n1, n2| n1 & n2);
             }
             Instruction::XorImmediate { n } => {
                 self.pc -= 1;
-                self.xor_immediate(n);
+                self.logical_template(n, |n1, n2| n1 ^ n2);
             }
             Instruction::OrImmediate { n } => {
                 self.pc -= 1;
-                self.or_immediate(n);
+                self.logical_template(n, |n1, n2| n1 | n2);
             }
             Instruction::CpImmediate { n } => self.pc -= 1,
 
@@ -294,15 +294,15 @@ impl CPU {
             }
             Instruction::AndRegister { r } => {
                 self.pc -= 2;
-                self.and_register(r, mem)?;
+                self.logical_reg_template(r, mem, |n1, n2| n1 & n2)?;
             }
             Instruction::XorRegister { r } => {
                 self.pc -= 2;
-                self.xor_register(r, mem)?;
+                self.logical_reg_template(r, mem, |n1, n2| n1 ^ n2)?;
             }
             Instruction::OrRegister { r } => {
                 self.pc -= 2;
-                self.or_register(r, mem)?;
+                self.logical_reg_template(r, mem, |n1, n2| n1 | n2)?;
             }
             Instruction::CpRegister { r } => self.pc -= 2,
         }
@@ -592,28 +592,11 @@ impl CPU {
         self.sub_flag_checks(result);
     }
 
-    fn and_immediate(&mut self, n: u8) {
+    fn logical_template<F: Fn(u8, u8) -> u8>(&mut self, n: u8, op: F) {
         let a = hi_byte(self.af);
-        let result = a & n;
+        let result = op(a, n);
 
         self.set_register_a(result as u8);
-        self.zero_flag_check(result);
-    }
-
-    fn xor_immediate(&mut self, n: u8) {
-        let a = hi_byte(self.af);
-        let result = a ^ n;
-
-        self.set_register_a(result as u8);
-        self.zero_flag_check(result);
-    }
-
-    fn or_immediate(&mut self, n: u8) {
-        let a = hi_byte(self.af);
-        let result = a | n;
-
-        self.set_register_a(result as u8);
-
         self.zero_flag_check(result);
     }
 
@@ -703,7 +686,12 @@ impl CPU {
         Ok(())
     }
 
-    fn and_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+    fn logical_reg_template<F: Fn(u8, u8) -> u8>(
+        &mut self,
+        r: RegisterID,
+        mem: &mut Memory,
+        op: F,
+    ) -> Result<(), CpuError> {
         let n = match r {
             RegisterID::B => hi_byte(self.bc),
             RegisterID::C => lo_byte(self.bc),
@@ -715,53 +703,7 @@ impl CPU {
             RegisterID::A => hi_byte(self.af),
             _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
         };
-        let a = hi_byte(self.af);
-        let result = a & n;
-
-        self.set_register_a(result);
-        self.zero_flag_check(result);
-
-        Ok(())
-    }
-
-    fn xor_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        };
-        let a = hi_byte(self.af);
-        let result = a ^ n;
-
-        self.set_register_a(result);
-        self.zero_flag_check(result);
-
-        Ok(())
-    }
-
-    fn or_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        };
-        let a = hi_byte(self.af);
-        let result = a | n;
-
-        self.set_register_a(result);
-        self.zero_flag_check(result);
+        self.logical_template(n, op);
 
         Ok(())
     }
