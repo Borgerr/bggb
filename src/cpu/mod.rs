@@ -101,6 +101,11 @@ impl CPU {
         Ok(result)
     }
 
+    fn set_register_a(&mut self, new_val: u8) {
+        self.af &= 0x00ff;
+        self.af |= (new_val as u16) << 8;
+    }
+
     pub fn fetch_decode_execute(&mut self, mem: &mut Memory) -> Result<(), CpuError> {
         let bytes = self.fetch_instr_u32(mem)?;
         let instr = Instruction::from_bytes(bytes);
@@ -155,7 +160,7 @@ impl CPU {
             }
             Instruction::LoadReg16 { r1, r2 } => {
                 self.pc -= 2;
-                self.load_registers16(r1, r2)?;
+                self.load_registers16(r1, r2, mem)?;
             }
             Instruction::LoadReg8 { r1, r2 } => {
                 self.pc -= 2;
@@ -402,21 +407,26 @@ impl CPU {
         self.af &= mem[(0xff00) + lo_byte(self.bc) as usize] as u16;
     }
 
-    fn load_registers16(&mut self, r1: RegisterID, r2: RegisterID) -> Result<(), CpuError> {
+    fn load_registers16(
+        &mut self,
+        r1: RegisterID,
+        r2: RegisterID,
+        mem: &mut Memory,
+    ) -> Result<(), CpuError> {
         match r1 {
             RegisterID::SP => self.sp = self.registerid_to_u16(r2),
             RegisterID::A => match r2 {
-                // special cases when HLplus or HLminus; doesn't apply to others
-                // as those instructions don't exist
                 RegisterID::HLplus => {
-                    self.af = self.registerid_to_u16(r2);
-                    self.hl += 1;
-                }
-                RegisterID::HLminus => {
-                    self.af = self.registerid_to_u16(r2);
+                    self.set_register_a(mem[self.hl as usize]);
                     self.hl -= 1;
                 }
-                _ => (),
+                RegisterID::HLminus => {
+                    self.set_register_a(mem[self.hl as usize]);
+                    self.hl += 1;
+                }
+                RegisterID::BC => self.set_register_a(mem[self.bc as usize]),
+                RegisterID::DE => self.set_register_a(mem[self.de as usize]),
+                _ => return Err(CpuError::ReadingFromInvalidReg { r: r2, pc: self.pc }),
             },
             RegisterID::BC => self.bc = self.registerid_to_u16(r2),
             RegisterID::DE => self.de = self.registerid_to_u16(r2),
@@ -429,12 +439,7 @@ impl CPU {
                 self.hl -= 1;
             }
 
-            _ => {
-                return Err(CpuError::ReadingIntoInvalidReg {
-                    r: r1,
-                    pc: self.pc - 1,
-                });
-            }
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r: r1, pc: self.pc }),
         }
 
         Ok(())
@@ -483,12 +488,7 @@ impl CPU {
             }
             RegisterID::HL => self.hl = new_val as u16,
 
-            _ => {
-                return Err(CpuError::ReadingIntoInvalidReg {
-                    r: r1,
-                    pc: self.pc - 1,
-                })
-            }
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r: r1, pc: self.pc }),
         }
 
         Ok(())
@@ -509,12 +509,10 @@ impl CPU {
         if result > 0xff {
             result -= 0xff;
             self.set_carry_flag_on();
-            self.af &= 0x00ff;
-            self.af |= result << 8;
+            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.af &= 0x00ff;
-            self.af |= result << 8;
+            self.set_register_a(result as u8);
         }
 
         if result == 0 {
@@ -535,12 +533,10 @@ impl CPU {
         if result > 0xff {
             result -= 0xff;
             self.set_carry_flag_on();
-            self.af &= 0x00ff;
-            self.af |= result << 8;
+            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.af &= 0x00ff;
-            self.af |= result << 8;
+            self.set_register_a(result as u8);
         }
 
         if result == 0 {
@@ -558,12 +554,10 @@ impl CPU {
         if result < 0 {
             result += 0xff;
             self.set_carry_flag_on();
-            self.af &= 0x00ff;
-            self.af |= (result as u16) << 8;
+            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.af &= 0x00ff;
-            self.af |= (result as u16) << 8;
+            self.set_register_a(result as u8);
         }
 
         if result == 0 {
@@ -584,12 +578,10 @@ impl CPU {
         if result < 0 {
             result += 0xff;
             self.set_carry_flag_on();
-            self.af &= 0x00ff;
-            self.af |= (result as u16) << 8;
+            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.af &= 0x00ff;
-            self.af |= (result as u16) << 8;
+            self.set_register_a(result as u8);
         }
 
         if result == 0 {
@@ -603,8 +595,7 @@ impl CPU {
         let a = hi_byte(self.af);
         let result = a & n;
 
-        self.af &= 0x00ff;
-        self.af |= (result as u16) << 8;
+        self.set_register_a(result as u8);
 
         if result == 0 {
             self.set_zero_flag_on();
@@ -617,8 +608,7 @@ impl CPU {
         let a = hi_byte(self.af);
         let result = a ^ n;
 
-        self.af &= 0x00ff;
-        self.af |= (result as u16) << 8;
+        self.set_register_a(result as u8);
 
         if result == 0 {
             self.set_zero_flag_on();
@@ -631,8 +621,7 @@ impl CPU {
         let a = hi_byte(self.af);
         let result = a | n;
 
-        self.af &= 0x00ff;
-        self.af |= (result as u16) << 8;
+        self.set_register_a(result as u8);
 
         if result == 0 {
             self.set_zero_flag_on();
