@@ -119,9 +119,9 @@ impl CPU {
             // possibly change to be more general for other fetches
             Err(CpuError::FetchError { pc: self.pc })
         } else {
-            let result = Ok(mem[self.pc as usize]);
+            let result = mem[self.pc as usize];
             self.pc += 1;
-            result
+            Ok(result)
         }
     }
     fn fetch_instr_u32(&mut self, mem: &Memory) -> Result<u32, CpuError> {
@@ -276,13 +276,34 @@ impl CPU {
             }
             Instruction::CpImmediate { n } => self.pc -= 1,
 
-            Instruction::AddRegister { r } => self.pc -= 2,
-            Instruction::AdcRegister { r } => self.pc -= 2,
-            Instruction::SubRegister { r } => self.pc -= 2,
-            Instruction::SbcRegister { r } => self.pc -= 2,
-            Instruction::AndRegister { r } => self.pc -= 2,
-            Instruction::XorRegister { r } => self.pc -= 2,
-            Instruction::OrRegister { r } => self.pc -= 2,
+            Instruction::AddRegister { r } => {
+                self.pc -= 2;
+                self.add_register(r, mem)?;
+            }
+            Instruction::AdcRegister { r } => {
+                self.pc -= 2;
+                self.adc_register(r, mem)?;
+            }
+            Instruction::SubRegister { r } => {
+                self.pc -= 2;
+                self.sub_register(r, mem)?;
+            }
+            Instruction::SbcRegister { r } => {
+                self.pc -= 2;
+                self.sbc_register(r, mem)?;
+            }
+            Instruction::AndRegister { r } => {
+                self.pc -= 2;
+                self.and_register(r, mem)?;
+            }
+            Instruction::XorRegister { r } => {
+                self.pc -= 2;
+                self.xor_register(r, mem)?;
+            }
+            Instruction::OrRegister { r } => {
+                self.pc -= 2;
+                self.or_register(r, mem)?;
+            }
             Instruction::CpRegister { r } => self.pc -= 2,
         }
 
@@ -501,11 +522,19 @@ impl CPU {
         self.interrupts_enabled = false;
     }
 
-    fn add_immediate(&mut self, n: u8) {
-        let n = n as u16;
-        let a = hi_byte(self.af) as u16;
-        let mut result = n + a;
+    fn sub_flag_checks(&mut self, mut result: i16) {
+        if result < 0 {
+            result += 0xff;
+            self.set_carry_flag_on();
+            self.set_register_a(result as u8);
+        } else {
+            self.set_carry_flag_off();
+            self.set_register_a(result as u8);
+        }
 
+        self.zero_flag_check(result as u8);
+    }
+    fn add_flag_checks(&mut self, mut result: u16) {
         if result > 0xff {
             result -= 0xff;
             self.set_carry_flag_on();
@@ -515,11 +544,22 @@ impl CPU {
             self.set_register_a(result as u8);
         }
 
+        self.zero_flag_check(result as u8);
+    }
+    fn zero_flag_check(&mut self, result: u8) {
         if result == 0 {
             self.set_zero_flag_on();
         } else {
             self.set_zero_flag_off();
         }
+    }
+
+    fn add_immediate(&mut self, n: u8) {
+        let n = n as u16;
+        let a = hi_byte(self.af) as u16;
+        let result = n + a;
+
+        self.add_flag_checks(result);
     }
     fn adc_immediate(&mut self, n: u8) {
         let n = n as u16;
@@ -530,41 +570,15 @@ impl CPU {
             result += 1;
         }
 
-        if result > 0xff {
-            result -= 0xff;
-            self.set_carry_flag_on();
-            self.set_register_a(result as u8);
-        } else {
-            self.set_carry_flag_off();
-            self.set_register_a(result as u8);
-        }
-
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
-        }
+        self.add_flag_checks(result);
     }
 
     fn sub_immediate(&mut self, n: u8) {
         let n = n as i16;
         let a = hi_byte(self.af) as i16;
-        let mut result = a - n;
+        let result = a - n;
 
-        if result < 0 {
-            result += 0xff;
-            self.set_carry_flag_on();
-            self.set_register_a(result as u8);
-        } else {
-            self.set_carry_flag_off();
-            self.set_register_a(result as u8);
-        }
-
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
-        }
+        self.sub_flag_checks(result);
     }
     fn sbc_immediate(&mut self, n: u8) {
         let n = n as i16;
@@ -575,20 +589,7 @@ impl CPU {
             result -= 1;
         }
 
-        if result < 0 {
-            result += 0xff;
-            self.set_carry_flag_on();
-            self.set_register_a(result as u8);
-        } else {
-            self.set_carry_flag_off();
-            self.set_register_a(result as u8);
-        }
-
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
-        }
+        self.sub_flag_checks(result);
     }
 
     fn and_immediate(&mut self, n: u8) {
@@ -596,12 +597,7 @@ impl CPU {
         let result = a & n;
 
         self.set_register_a(result as u8);
-
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
-        }
+        self.zero_flag_check(result);
     }
 
     fn xor_immediate(&mut self, n: u8) {
@@ -609,12 +605,7 @@ impl CPU {
         let result = a ^ n;
 
         self.set_register_a(result as u8);
-
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
-        }
+        self.zero_flag_check(result);
     }
 
     fn or_immediate(&mut self, n: u8) {
@@ -623,10 +614,155 @@ impl CPU {
 
         self.set_register_a(result as u8);
 
-        if result == 0 {
-            self.set_zero_flag_on();
-        } else {
-            self.set_zero_flag_off();
+        self.zero_flag_check(result);
+    }
+
+    fn add_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        } as u16;
+        let a = hi_byte(self.af) as u16;
+        let result = n + a;
+
+        self.add_flag_checks(result);
+
+        Ok(())
+    }
+    fn adc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        } as u16;
+        let a = hi_byte(self.af) as u16;
+        let mut result = n + a;
+
+        if c_flag(self.af) {
+            result += 1;
         }
+
+        self.add_flag_checks(result);
+
+        Ok(())
+    }
+
+    fn sub_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        } as i16;
+        let a = hi_byte(self.af) as i16;
+        let result = a - n;
+
+        self.sub_flag_checks(result);
+
+        Ok(())
+    }
+    fn sbc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        } as i16;
+        let a = hi_byte(self.af) as i16;
+        let mut result = a - n;
+
+        if c_flag(self.af) {
+            result -= 1;
+        }
+
+        self.sub_flag_checks(result);
+
+        Ok(())
+    }
+
+    fn and_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        };
+        let a = hi_byte(self.af);
+        let result = a & n;
+
+        self.set_register_a(result);
+        self.zero_flag_check(result);
+
+        Ok(())
+    }
+
+    fn xor_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        };
+        let a = hi_byte(self.af);
+        let result = a ^ n;
+
+        self.set_register_a(result);
+        self.zero_flag_check(result);
+
+        Ok(())
+    }
+
+    fn or_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = match r {
+            RegisterID::B => hi_byte(self.bc),
+            RegisterID::C => lo_byte(self.bc),
+            RegisterID::D => hi_byte(self.de),
+            RegisterID::E => lo_byte(self.de),
+            RegisterID::H => hi_byte(self.hl),
+            RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::A => hi_byte(self.af),
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        };
+        let a = hi_byte(self.af);
+        let result = a | n;
+
+        self.set_register_a(result);
+        self.zero_flag_check(result);
+
+        Ok(())
     }
 }
