@@ -275,7 +275,10 @@ impl CPU {
                 self.pc -= 1;
                 self.logical_template(n, |n1, n2| n1 | n2);
             }
-            Instruction::CpImmediate { n } => self.pc -= 1,
+            Instruction::CpImmediate { n } => {
+                self.pc -= 1;
+                self.compare_immediate(n);
+            }
 
             Instruction::AddRegister { r } => {
                 self.pc -= 2;
@@ -305,7 +308,10 @@ impl CPU {
                 self.pc -= 2;
                 self.logical_reg_template(r, mem, |n1, n2| n1 | n2)?;
             }
-            Instruction::CpRegister { r } => self.pc -= 2,
+            Instruction::CpRegister { r } => {
+                self.pc -= 2;
+                self.compare_register(r, mem)?;
+            }
         }
 
         Ok(())
@@ -586,6 +592,16 @@ impl CPU {
         self.sub_flag_checks(result);
     }
 
+    fn compare_immediate(&mut self, n: u8) {
+        // basically a sub immediate but not changing A
+        let n = n as i16;
+        let a = hi_byte(self.af) as i16;
+        let result = a - n;
+
+        self.sub_flag_checks(result);
+        self.set_register_a(a as u8);
+    }
+
     fn logical_template<F: Fn(u8, u8) -> u8>(&mut self, n: u8, op: F) {
         let a = hi_byte(self.af);
         let result = op(a, n);
@@ -595,45 +611,35 @@ impl CPU {
     }
 
     fn add_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = self.r_table_lookup(r, mem)? as u16;
-        let a = hi_byte(self.af) as u16;
-        let result = n + a;
-
-        self.add_flag_checks(result);
+        let n = self.r_table_lookup(r, mem)?;
+        self.add_immediate(n);
 
         Ok(())
     }
     fn adc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = self.r_table_lookup(r, mem)? as u16;
-        let a = hi_byte(self.af) as u16;
-        let mut result = n + a;
-
-        if c_flag(self.af) {
-            result += 1;
-        }
-
-        self.add_flag_checks(result);
+        let n = self.r_table_lookup(r, mem)?;
+        self.adc_immediate(n);
 
         Ok(())
     }
 
     fn sub_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = self.r_table_lookup(r, mem)? as i16;
-        let a = hi_byte(self.af) as i16;
-        let result = a - n;
-
-        self.sub_flag_checks(result);
+        let n = self.r_table_lookup(r, mem)?;
+        self.sub_immediate(n);
 
         Ok(())
     }
     fn sbc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = self.r_table_lookup(r, mem)?;
+        self.sbc_immediate(n);
+
+        Ok(())
+    }
+
+    fn compare_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
         let n = self.r_table_lookup(r, mem)? as i16;
         let a = hi_byte(self.af) as i16;
-        let mut result = a - n;
-
-        if c_flag(self.af) {
-            result -= 1;
-        }
+        let result = a - n;
 
         self.sub_flag_checks(result);
 
