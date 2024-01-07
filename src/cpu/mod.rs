@@ -85,7 +85,7 @@ impl CPU {
         }
     }
 
-    fn registerid_to_u8(&mut self, r: RegisterID) -> Result<u8, CpuError> {
+    fn r_table_lookup(&mut self, r: RegisterID, mem: &mut Memory) -> Result<u8, CpuError> {
         let result = match r {
             RegisterID::A => hi_byte(self.af),
             RegisterID::B => hi_byte(self.bc),
@@ -94,6 +94,7 @@ impl CPU {
             RegisterID::E => lo_byte(self.de),
             RegisterID::H => hi_byte(self.hl),
             RegisterID::L => lo_byte(self.hl),
+            RegisterID::HL => mem[self.hl as usize],
 
             _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
         };
@@ -356,7 +357,7 @@ impl CPU {
             RegisterID::DE => self.de = nn,
             RegisterID::HL => self.hl = nn,
             RegisterID::SP => self.sp = nn,
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc - 3 }),
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
         }
         Ok(())
     }
@@ -398,7 +399,7 @@ impl CPU {
             RegisterID::HL => {
                 self.hl = n as u16;
             }
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc - 2 }),
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
         }
 
         Ok(())
@@ -407,10 +408,7 @@ impl CPU {
     fn load_sp_to_hl_with_offset(&mut self, mem: &Memory, d: i8) -> Result<(), CpuError> {
         let index = ((self.sp as i32) + (d as i32)) as usize;
         if index > 0xffff {
-            return Err(CpuError::IndexOutOfBounds {
-                index,
-                pc: self.pc - 2,
-            });
+            return Err(CpuError::IndexOutOfBounds { index, pc: self.pc });
         }
 
         self.hl = mem[index] as u16;
@@ -472,11 +470,7 @@ impl CPU {
         r2: RegisterID,
         mem: &mut Memory,
     ) -> Result<(), CpuError> {
-        let new_val = self.registerid_to_u8(r2)?;
-
-        if let RegisterID::HL = r1 {
-            mem[self.hl as usize] = new_val;
-        }
+        let new_val = self.r_table_lookup(r2, mem)?;
 
         match r1 {
             RegisterID::A => {
@@ -598,23 +592,6 @@ impl CPU {
 
         self.set_register_a(result as u8);
         self.zero_flag_check(result);
-    }
-
-    fn r_table_lookup(&mut self, r: RegisterID, mem: &mut Memory) -> Result<u8, CpuError> {
-        let result = match r {
-            RegisterID::A => hi_byte(self.af),
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        };
-
-        Ok(result)
     }
 
     fn add_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
