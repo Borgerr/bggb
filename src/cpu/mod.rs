@@ -637,11 +637,8 @@ impl CPU {
     }
 
     fn compare_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = self.r_table_lookup(r, mem)? as i16;
-        let a = hi_byte(self.af) as i16;
-        let result = a - n;
-
-        self.sub_flag_checks(result);
+        let n = self.r_table_lookup(r, mem)?;
+        self.compare_immediate(n);
 
         Ok(())
     }
