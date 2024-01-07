@@ -600,8 +600,9 @@ impl CPU {
         self.zero_flag_check(result);
     }
 
-    fn add_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
+    fn r_table_lookup(&mut self, r: RegisterID, mem: &mut Memory) -> Result<u8, CpuError> {
+        let result = match r {
+            RegisterID::A => hi_byte(self.af),
             RegisterID::B => hi_byte(self.bc),
             RegisterID::C => lo_byte(self.bc),
             RegisterID::D => hi_byte(self.de),
@@ -609,9 +610,15 @@ impl CPU {
             RegisterID::H => hi_byte(self.hl),
             RegisterID::L => lo_byte(self.hl),
             RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
+
             _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        } as u16;
+        };
+
+        Ok(result)
+    }
+
+    fn add_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let n = self.r_table_lookup(r, mem)? as u16;
         let a = hi_byte(self.af) as u16;
         let result = n + a;
 
@@ -620,17 +627,7 @@ impl CPU {
         Ok(())
     }
     fn adc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        } as u16;
+        let n = self.r_table_lookup(r, mem)? as u16;
         let a = hi_byte(self.af) as u16;
         let mut result = n + a;
 
@@ -644,17 +641,7 @@ impl CPU {
     }
 
     fn sub_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        } as i16;
+        let n = self.r_table_lookup(r, mem)? as i16;
         let a = hi_byte(self.af) as i16;
         let result = a - n;
 
@@ -663,17 +650,7 @@ impl CPU {
         Ok(())
     }
     fn sbc_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        } as i16;
+        let n = self.r_table_lookup(r, mem)? as i16;
         let a = hi_byte(self.af) as i16;
         let mut result = a - n;
 
@@ -692,17 +669,7 @@ impl CPU {
         mem: &mut Memory,
         op: F,
     ) -> Result<(), CpuError> {
-        let n = match r {
-            RegisterID::B => hi_byte(self.bc),
-            RegisterID::C => lo_byte(self.bc),
-            RegisterID::D => hi_byte(self.de),
-            RegisterID::E => lo_byte(self.de),
-            RegisterID::H => hi_byte(self.hl),
-            RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
-            RegisterID::A => hi_byte(self.af),
-            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
-        };
+        let n = self.r_table_lookup(r, mem)?;
         self.logical_template(n, op);
 
         Ok(())
