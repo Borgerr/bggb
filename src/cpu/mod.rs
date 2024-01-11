@@ -102,6 +102,23 @@ impl CPU {
         Ok(result)
     }
 
+    fn r_table_assign(&mut self, r: RegisterID, val: u8, mem: &mut Memory) -> Result<(), CpuError> {
+        match r {
+            RegisterID::A => {}
+            RegisterID::B => {}
+            RegisterID::C => {}
+            RegisterID::D => {}
+            RegisterID::E => {}
+            RegisterID::H => {}
+            RegisterID::L => {}
+            RegisterID::HL => {}
+
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
+        }
+
+        Ok(())
+    }
+
     fn set_register_a(&mut self, new_val: u8) {
         self.af &= 0x00ff;
         self.af |= (new_val as u16) << 8;
@@ -192,14 +209,38 @@ impl CPU {
             Instruction::JumpToHL => self.jump_to_hl(),
 
             // CB-prefixed
-            Instruction::RLC { r } => self.pc -= 1,
-            Instruction::RRC { r } => self.pc -= 1,
-            Instruction::RL { r } => self.pc -= 1,
-            Instruction::RR { r } => self.pc -= 1,
-            Instruction::SLA { r } => self.pc -= 1,
-            Instruction::SRA { r } => self.pc -= 1,
-            Instruction::SWAP { r } => self.pc -= 1,
-            Instruction::SRL { r } => self.pc -= 1,
+            Instruction::RLC { r } => {
+                self.pc -= 1;
+                self.rotate_left(r, mem)?;
+            }
+            Instruction::RRC { r } => {
+                self.pc -= 1;
+                self.rotate_right(r, mem)?;
+            }
+            Instruction::RL { r } => {
+                self.pc -= 1;
+                self.rotate_left_thru_carry(r, mem)?;
+            }
+            Instruction::RR { r } => {
+                self.pc -= 1;
+                self.rotate_right_thru_carry(r, mem)?;
+            }
+            Instruction::SLA { r } => {
+                self.pc -= 1;
+                self.shift_left_arithmetic(r, mem)?;
+            }
+            Instruction::SRA { r } => {
+                self.pc -= 1;
+                self.shift_right_arithmetic(r, mem)?;
+            }
+            Instruction::SWAP { r } => {
+                self.pc -= 1;
+                self.swap_nibbles_instr(r, mem)?;
+            }
+            Instruction::SRL { r } => {
+                self.pc -= 1;
+                self.shift_right_logical(r, mem)?;
+            }
 
             // also CB-prefixed (y is included in opcode)
             Instruction::BIT { y, r } => self.pc -= 1,
@@ -651,6 +692,59 @@ impl CPU {
     ) -> Result<(), CpuError> {
         let n = self.r_table_lookup(r, mem)?;
         self.logical_template(n, op);
+
+        Ok(())
+    }
+
+    fn rotate_left(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r, mem)?;
+        if (n >> 7) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.r_table_assign(r2, n << 1, mem)?;
+
+        Ok(())
+    }
+    fn rotate_right(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+
+    fn rotate_left_thru_carry(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+    fn rotate_right_thru_carry(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+
+    fn shift_left_arithmetic(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+    fn shift_right_arithmetic(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+
+    fn swap_nibbles_instr(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
+
+        Ok(())
+    }
+
+    fn shift_right_logical(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let mut n = self.r_table_lookup(r, mem)?;
 
         Ok(())
     }
