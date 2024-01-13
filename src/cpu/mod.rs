@@ -709,7 +709,6 @@ impl CPU {
         }
 
         self.zero_flag_check(n);
-
         self.r_table_assign(r, n, mem)?;
 
         Ok(())
@@ -727,19 +726,46 @@ impl CPU {
         }
 
         self.zero_flag_check(n);
-
         self.r_table_assign(r, n, mem)?;
 
         Ok(())
     }
 
     fn rotate_left_thru_carry(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let mut n = self.r_table_lookup(r2, mem)?;
+        if (n >> 7) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        n <<= 1;
+        if c_flag(self.af) {
+            n |= 0b1;
+        }
+
+        self.zero_flag_check(n);
+        self.r_table_assign(r, n, mem)?;
 
         Ok(())
     }
     fn rotate_right_thru_carry(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let mut n = self.r_table_lookup(r2, mem)?;
+        if (n & 0b1) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        n >>= 1;
+        if c_flag(self.af) {
+            n |= 0x80;
+        }
+
+        self.zero_flag_check(n);
+        self.r_table_assign(r, n, mem)?;
 
         Ok(())
     }
