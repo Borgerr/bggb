@@ -771,12 +771,30 @@ impl CPU {
     }
 
     fn shift_left_arithmetic(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r2, mem)?;
+        if (n >> 7) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.zero_flag_check(n << 1);
+        self.r_table_assign(r, n << 1, mem)?;
 
         Ok(())
     }
     fn shift_right_arithmetic(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r2, mem)?;
+        if (n & 0b1) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.zero_flag_check(n >> 1);
+        self.r_table_assign(r, n >> 1, mem)?;
 
         Ok(())
     }
