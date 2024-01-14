@@ -786,27 +786,45 @@ impl CPU {
     }
     fn shift_right_arithmetic(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
         let r2 = r.clone();
-        let n = self.r_table_lookup(r2, mem)?;
+        let n = self.r_table_lookup(r2, mem)? as i8;
         if (n & 0b1) != 0 {
             self.set_carry_flag_on();
         } else {
             self.set_carry_flag_off();
         }
 
-        self.zero_flag_check(n >> 1);
-        self.r_table_assign(r, n >> 1, mem)?;
+        let result = (n >> 1) as u8;
+        self.zero_flag_check(result);
+        self.r_table_assign(r, result, mem)?;
 
         Ok(())
     }
 
     fn swap_nibbles_instr(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r2, mem)?;
+        let nibble1 = n >> 4;
+        let nibble2 = n & 0x0f;
+
+        let result = (nibble2 << 4) | nibble1;
+        self.zero_flag_check(result);
+        self.r_table_assign(r, result, mem)?;
 
         Ok(())
     }
 
     fn shift_right_logical(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
-        let mut n = self.r_table_lookup(r, mem)?;
+        let r2 = r.clone();
+        let mut n = self.r_table_lookup(r2, mem)?;
+        if (n & 0b1) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        let result = n >> 1;
+        self.zero_flag_check(result);
+        self.r_table_assign(r, result, mem)?;
 
         Ok(())
     }
