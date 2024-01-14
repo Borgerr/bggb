@@ -104,14 +104,32 @@ impl CPU {
 
     fn r_table_assign(&mut self, r: RegisterID, val: u8, mem: &mut Memory) -> Result<(), CpuError> {
         match r {
-            RegisterID::A => {}
-            RegisterID::B => {}
-            RegisterID::C => {}
-            RegisterID::D => {}
-            RegisterID::E => {}
-            RegisterID::H => {}
-            RegisterID::L => {}
-            RegisterID::HL => {}
+            RegisterID::A => self.set_register_a(val),
+            RegisterID::B => {
+                self.bc &= 0x00ff;
+                self.bc |= (val as u16) << 8;
+            }
+            RegisterID::C => {
+                self.bc &= 0xff00;
+                self.bc |= val as u16;
+            }
+            RegisterID::D => {
+                self.de &= 0x00ff;
+                self.de |= (val as u16) << 8;
+            }
+            RegisterID::E => {
+                self.de &= 0xff00;
+                self.de |= val as u16;
+            }
+            RegisterID::H => {
+                self.hl &= 0x00ff;
+                self.hl |= (val as u16) << 8;
+            }
+            RegisterID::L => {
+                self.hl &= 0xff00;
+                self.hl |= val as u16;
+            }
+            RegisterID::HL => mem[self.hl as usize] = val,
 
             _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
         }
@@ -122,6 +140,10 @@ impl CPU {
     fn set_register_a(&mut self, new_val: u8) {
         self.af &= 0x00ff;
         self.af |= (new_val as u16) << 8;
+    }
+    fn reset_flags(&mut self) {
+        // TODO: change flag handling in appropriate instructions
+        self.af &= 0xff00;
     }
 
     pub fn fetch_decode_execute(&mut self, mem: &mut Memory) -> Result<(), CpuError> {
@@ -211,34 +233,42 @@ impl CPU {
             // CB-prefixed
             Instruction::RLC { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.rotate_left(r, mem)?;
             }
             Instruction::RRC { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.rotate_right(r, mem)?;
             }
             Instruction::RL { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.rotate_left_thru_carry(r, mem)?;
             }
             Instruction::RR { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.rotate_right_thru_carry(r, mem)?;
             }
             Instruction::SLA { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.shift_left_arithmetic(r, mem)?;
             }
             Instruction::SRA { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.shift_right_arithmetic(r, mem)?;
             }
             Instruction::SWAP { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.swap_nibbles_instr(r, mem)?;
             }
             Instruction::SRL { r } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.shift_right_logical(r, mem)?;
             }
 
@@ -290,67 +320,83 @@ impl CPU {
 
             Instruction::AddImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.add_immediate(n);
             }
             Instruction::AdcImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.adc_immediate(n);
             }
             Instruction::SubImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.sub_immediate(n);
             }
             Instruction::SbcImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.sbc_immediate(n);
             }
             Instruction::AndImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.logical_template(n, |n1, n2| n1 & n2);
             }
             Instruction::XorImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.logical_template(n, |n1, n2| n1 ^ n2);
             }
             Instruction::OrImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.logical_template(n, |n1, n2| n1 | n2);
             }
             Instruction::CpImmediate { n } => {
                 self.pc -= 1;
+                self.reset_flags();
                 self.compare_immediate(n);
             }
 
             Instruction::AddRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.add_register(r, mem)?;
             }
             Instruction::AdcRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.adc_register(r, mem)?;
             }
             Instruction::SubRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.sub_register(r, mem)?;
             }
             Instruction::SbcRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.sbc_register(r, mem)?;
             }
             Instruction::AndRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.logical_reg_template(r, mem, |n1, n2| n1 & n2)?;
             }
             Instruction::XorRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.logical_reg_template(r, mem, |n1, n2| n1 ^ n2)?;
             }
             Instruction::OrRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.logical_reg_template(r, mem, |n1, n2| n1 | n2)?;
             }
             Instruction::CpRegister { r } => {
                 self.pc -= 2;
+                self.reset_flags();
                 self.compare_register(r, mem)?;
             }
         }
@@ -817,7 +863,7 @@ impl CPU {
 
     fn shift_right_logical(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
         let r2 = r.clone();
-        let mut n = self.r_table_lookup(r2, mem)?;
+        let n = self.r_table_lookup(r2, mem)?;
         if (n & 0b1) != 0 {
             self.set_carry_flag_on();
         } else {
