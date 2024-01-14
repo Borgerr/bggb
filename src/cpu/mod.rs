@@ -574,6 +574,7 @@ impl CPU {
         }
 
         self.zero_flag_check(result as u8);
+        self.set_register_a(result as u8);
     }
     fn add_flag_checks(&mut self, mut result: u16) {
         if result > 0xff {
@@ -586,6 +587,7 @@ impl CPU {
         }
 
         self.zero_flag_check(result as u8);
+        self.set_register_a(result as u8);
     }
     fn zero_flag_check(&mut self, result: u8) {
         if result == 0 {
