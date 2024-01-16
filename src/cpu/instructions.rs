@@ -16,6 +16,7 @@ pub enum RegisterID {
 
     HLplus,
     HLminus,
+    HLaddress,
 }
 impl RegisterID {
     pub fn r_lookup(val: u8) -> RegisterID {
@@ -27,7 +28,7 @@ impl RegisterID {
             3 => RegisterID::E,
             4 => RegisterID::H,
             5 => RegisterID::L,
-            6 => RegisterID::HL,
+            6 => RegisterID::HLaddress,
             7 | _ => RegisterID::A,
         }
     }

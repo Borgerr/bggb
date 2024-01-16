@@ -106,7 +106,9 @@ impl CPU {
             RegisterID::AF => self.af,
             RegisterID::BC => self.bc,
             RegisterID::DE => self.de,
-            RegisterID::HL | RegisterID::HLplus | RegisterID::HLminus => self.hl,
+            RegisterID::HL | RegisterID::HLplus | RegisterID::HLminus | RegisterID::HLaddress => {
+                self.hl
+            }
             RegisterID::SP => self.sp,
 
             RegisterID::A => hi_byte(self.af) as u16,
@@ -128,7 +130,7 @@ impl CPU {
             RegisterID::E => lo_byte(self.de),
             RegisterID::H => hi_byte(self.hl),
             RegisterID::L => lo_byte(self.hl),
-            RegisterID::HL => mem[self.hl as usize],
+            RegisterID::HLaddress => mem[self.hl as usize],
 
             _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
         };
@@ -163,7 +165,7 @@ impl CPU {
                 self.hl &= 0xff00;
                 self.hl |= val as u16;
             }
-            RegisterID::HL => mem[self.hl as usize] = val,
+            RegisterID::HLaddress => mem[self.hl as usize] = val,
 
             _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
         }
@@ -508,44 +510,7 @@ impl CPU {
     }
 
     fn load_immediate8(&mut self, r: RegisterID, n: u8, mem: &mut Memory) -> Result<(), CpuError> {
-        if let RegisterID::HL = r {
-            mem[self.hl as usize] = n;
-        }
-
-        match r {
-            RegisterID::A => {
-                self.af |= 0xff00;
-                self.af &= (n as u16) << 8;
-            }
-            RegisterID::B => {
-                self.bc |= 0xff00;
-                self.bc &= (n as u16) << 8;
-            }
-            RegisterID::C => {
-                self.bc |= 0x00ff;
-                self.bc &= n as u16;
-            }
-            RegisterID::D => {
-                self.de |= 0xff00;
-                self.de &= (n as u16) << 8;
-            }
-            RegisterID::E => {
-                self.de |= 0x00ff;
-                self.de &= n as u16;
-            }
-            RegisterID::H => {
-                self.hl |= 0xff00;
-                self.hl &= (n as u16) << 8;
-            }
-            RegisterID::L => {
-                self.hl |= 0x00ff;
-                self.hl &= n as u16;
-            }
-            RegisterID::HL => {
-                self.hl = n as u16;
-            }
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
-        }
+        self.r_table_assign(r, n, mem)?;
 
         Ok(())
     }
@@ -616,40 +581,7 @@ impl CPU {
         mem: &mut Memory,
     ) -> Result<(), CpuError> {
         let new_val = self.r_table_lookup(r2, mem)?;
-
-        match r1 {
-            RegisterID::A => {
-                self.af |= 0xff00;
-                self.af &= (new_val as u16) << 8;
-            }
-            RegisterID::B => {
-                self.bc |= 0xff00;
-                self.bc &= (new_val as u16) << 8;
-            }
-            RegisterID::C => {
-                self.bc |= 0x00ff;
-                self.bc &= new_val as u16;
-            }
-            RegisterID::D => {
-                self.de |= 0xff00;
-                self.de &= (new_val as u16) << 8;
-            }
-            RegisterID::E => {
-                self.de |= 0x00ff;
-                self.de &= new_val as u16;
-            }
-            RegisterID::H => {
-                self.hl |= 0xff00;
-                self.hl &= (new_val as u16) << 8;
-            }
-            RegisterID::L => {
-                self.hl |= 0x00ff;
-                self.hl &= new_val as u16;
-            }
-            RegisterID::HL => self.hl = new_val as u16,
-
-            _ => return Err(CpuError::ReadingIntoInvalidReg { r: r1, pc: self.pc }),
-        }
+        self.r_table_assign(r1, new_val, mem)?;
 
         Ok(())
     }
