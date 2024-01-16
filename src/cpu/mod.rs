@@ -78,6 +78,17 @@ impl CPU {
         self.af |= flags as u16;
     }
 
+    fn set_subtraction_flag_on(&mut self) {
+        let flags = lo_byte(self.af) | 0b100000;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+    fn set_subtraction_flag_off(&mut self) {
+        let flags = lo_byte(self.af) & 0b011111;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+
     fn reset_flags(&mut self) {
         // TODO: change flag handling in appropriate instructions
         self.af &= 0xff00;
@@ -637,6 +648,8 @@ impl CPU {
             self.set_carry_flag_off();
             self.set_register_a(result as u8);
         }
+
+        self.set_subtraction_flag_on();
 
         self.zero_flag_check(result as u8);
         self.set_register_a(result as u8);
