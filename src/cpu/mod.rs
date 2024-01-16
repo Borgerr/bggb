@@ -55,6 +55,13 @@ impl CPU {
         self.af &= 0xff00;
         self.af |= flags as u16;
     }
+    fn complement_carry_flag(&mut self) {
+        if c_flag(self.af) {
+            self.set_carry_flag_off();
+        } else {
+            self.set_carry_flag_on();
+        }
+    }
 
     fn set_zero_flag_on(&mut self) {
         let flags = lo_byte(self.af) | 0b1000000;
@@ -306,14 +313,35 @@ impl CPU {
             Instruction::DEC { r } => self.pc -= 2,
             Instruction::INC { r } => self.pc -= 2,
 
-            Instruction::RLCA => self.pc -= 2,
-            Instruction::RRCA => self.pc -= 2,
-            Instruction::RLA => self.pc -= 2,
-            Instruction::RRA => self.pc -= 2,
+            Instruction::RLCA => {
+                self.pc -= 2;
+                self.rotate_left_accumulator();
+            }
+            Instruction::RRCA => {
+                self.pc -= 2;
+                self.rotate_right_accumulator();
+            }
+            Instruction::RLA => {
+                self.pc -= 2;
+                self.rotate_left_thru_carry_accumulator();
+            }
+            Instruction::RRA => {
+                self.pc -= 2;
+                self.rotate_right_thru_carry_accumulator();
+            }
             Instruction::DAA => self.pc -= 2,
-            Instruction::CPL => self.pc -= 2,
-            Instruction::SCF => self.pc -= 2,
-            Instruction::CCF => self.pc -= 2,
+            Instruction::CPL => {
+                self.pc -= 2;
+                self.complement_accumulator();
+            }
+            Instruction::SCF => {
+                self.pc -= 2;
+                self.set_carry_flag_on();
+            }
+            Instruction::CCF => {
+                self.pc -= 2;
+                self.complement_carry_flag();
+            }
 
             Instruction::RET { f } => self.pc -= 2,
 
@@ -913,5 +941,66 @@ impl CPU {
         self.r_table_assign(r, result, mem)?;
 
         Ok(())
+    }
+
+    fn complement_accumulator(&mut self) {
+        let a = hi_byte(self.af);
+        self.set_register_a(!a);
+        self.set_subtraction_flag_on();
+        self.set_halfcarry_flag_on();
+    }
+
+    fn rotate_right_accumulator(&mut self) {
+        let mut a = hi_byte(self.af);
+        let rightmost_on = a & 0b1 != 0;
+
+        a >>= 1;
+        if rightmost_on {
+            self.set_carry_flag_on();
+            a |= 0x80;
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.set_register_a(a);
+    }
+    fn rotate_left_accumulator(&mut self) {
+        let mut a = hi_byte(self.af);
+        let leftmost_on = a & 0x80 != 0;
+
+        a <<= 1;
+        if leftmost_on {
+            self.set_carry_flag_on();
+            a |= 0b1;
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.set_register_a(a);
+    }
+
+    fn rotate_right_thru_carry_accumulator(&mut self) {
+        let carry_bit = if c_flag(self.af) { 0x80 } else { 0x0 };
+        let mut a = hi_byte(self.af);
+        if (a & 0b1) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        a = (a >> 1) | carry_bit;
+        self.set_register_a(a);
+    }
+    fn rotate_left_thru_carry_accumulator(&mut self) {
+        let carry_bit = if c_flag(self.af) { 0b1 } else { 0b0 };
+        let mut a = hi_byte(self.af);
+        if (a & 0x80) != 0 {
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        a = (a << 1) | carry_bit;
+        self.set_register_a(a);
     }
 }
