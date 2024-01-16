@@ -354,6 +354,7 @@ impl CPU {
                 self.pc -= 1;
                 self.reset_flags();
                 self.logical_template(n, |n1, n2| n1 & n2);
+                self.set_halfcarry_flag_on(); // AND sets half-carry on
             }
             Instruction::XorImmediate { n } => {
                 self.pc -= 1;
@@ -621,7 +622,13 @@ impl CPU {
         self.interrupts_enabled = false;
     }
 
-    fn sub_flag_checks(&mut self, mut result: i16) {
+    fn sub_flag_checks(&mut self, mut result: i16, prev_val: i16) {
+        if (prev_val >= 0b00010000) && (result < 0b00001000) {
+            self.set_halfcarry_flag_on();
+        } else {
+            self.set_halfcarry_flag_off();
+        }
+
         if result < 0 {
             result += 0xff;
             self.set_carry_flag_on();
@@ -634,7 +641,13 @@ impl CPU {
         self.zero_flag_check(result as u8);
         self.set_register_a(result as u8);
     }
-    fn add_flag_checks(&mut self, mut result: u16) {
+    fn add_flag_checks(&mut self, mut result: u16, prev_val: u16) {
+        if (prev_val <= 0b00001000) && (result > 0b00001000) {
+            self.set_halfcarry_flag_on();
+        } else {
+            self.set_halfcarry_flag_off();
+        }
+
         if result > 0xff {
             result -= 0xff;
             self.set_carry_flag_on();
@@ -660,7 +673,7 @@ impl CPU {
         let a = hi_byte(self.af) as u16;
         let result = n + a;
 
-        self.add_flag_checks(result);
+        self.add_flag_checks(result, n);
     }
     fn adc_immediate(&mut self, n: u8) {
         let n = n as u16;
@@ -671,7 +684,7 @@ impl CPU {
             result += 1;
         }
 
-        self.add_flag_checks(result);
+        self.add_flag_checks(result, n);
     }
 
     fn sub_immediate(&mut self, n: u8) {
@@ -679,7 +692,7 @@ impl CPU {
         let a = hi_byte(self.af) as i16;
         let result = a - n;
 
-        self.sub_flag_checks(result);
+        self.sub_flag_checks(result, n);
     }
     fn sbc_immediate(&mut self, n: u8) {
         let n = n as i16;
@@ -690,7 +703,7 @@ impl CPU {
             result -= 1;
         }
 
-        self.sub_flag_checks(result);
+        self.sub_flag_checks(result, n);
     }
 
     fn compare_immediate(&mut self, n: u8) {
@@ -699,7 +712,7 @@ impl CPU {
         let a = hi_byte(self.af) as i16;
         let result = a - n;
 
-        self.sub_flag_checks(result);
+        self.sub_flag_checks(result, n);
         self.set_register_a(a as u8);
     }
 
