@@ -67,6 +67,22 @@ impl CPU {
         self.af |= flags as u16;
     }
 
+    fn set_halfcarry_flag_on(&mut self) {
+        let flags = lo_byte(self.af) | 0b10000;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+    fn set_halfcarry_flag_off(&mut self) {
+        let flags = lo_byte(self.af) & 0b01111;
+        self.af &= 0xff00;
+        self.af |= flags as u16;
+    }
+
+    fn reset_flags(&mut self) {
+        // TODO: change flag handling in appropriate instructions
+        self.af &= 0xff00;
+    }
+
     fn registerid_to_u16(&mut self, r: RegisterID) -> u16 {
         match r {
             RegisterID::AF => self.af,
@@ -140,10 +156,6 @@ impl CPU {
     fn set_register_a(&mut self, new_val: u8) {
         self.af &= 0x00ff;
         self.af |= (new_val as u16) << 8;
-    }
-    fn reset_flags(&mut self) {
-        // TODO: change flag handling in appropriate instructions
-        self.af &= 0xff00;
     }
 
     pub fn fetch_decode_execute(&mut self, mem: &mut Memory) -> Result<(), CpuError> {
