@@ -312,8 +312,11 @@ impl CPU {
             Instruction::AddRegisters { r1, r2 } => self.pc -= 2,
             Instruction::AddSigned { r, d } => self.pc -= 1,
 
-            Instruction::DEC { r } => self.pc -= 2,
-            Instruction::INC { r } => self.pc -= 2,
+            Instruction::DEC8b { r } => self.pc -= 2,
+            Instruction::INC8b { r } => self.pc -= 2,
+
+            Instruction::DEC16b { r } => self.pc -= 2,
+            Instruction::INC16b { r } => self.pc -= 2,
 
             Instruction::RLCA => {
                 self.pc -= 2;

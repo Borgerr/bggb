@@ -111,8 +111,10 @@ pub enum Instruction {
     AddRegisters { r1: RegisterID, r2: RegisterID },
     AddSigned { r: RegisterID, d: i8 },
 
-    DEC { r: RegisterID },
-    INC { r: RegisterID },
+    DEC8b { r: RegisterID },
+    DEC16b { r: RegisterID },
+    INC8b { r: RegisterID },
+    INC16b { r: RegisterID },
 
     RLCA,
     RRCA,
@@ -312,19 +314,19 @@ impl Instruction {
             }
             3 => {
                 if q {
-                    Instruction::DEC {
+                    Instruction::DEC16b {
                         r: RegisterID::rp_lookup(p),
                     }
                 } else {
-                    Instruction::INC {
+                    Instruction::INC16b {
                         r: RegisterID::rp_lookup(p),
                     }
                 }
             }
-            4 => Instruction::INC {
+            4 => Instruction::INC8b {
                 r: RegisterID::r_lookup(y),
             },
-            5 => Instruction::DEC {
+            5 => Instruction::DEC8b {
                 r: RegisterID::r_lookup(y),
             },
             6 => Instruction::Load8 {
