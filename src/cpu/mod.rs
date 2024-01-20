@@ -312,8 +312,14 @@ impl CPU {
             Instruction::AddRegisters { r1, r2 } => self.pc -= 2,
             Instruction::AddSigned { r, d } => self.pc -= 1,
 
-            Instruction::DEC8b { r } => self.pc -= 2,
-            Instruction::INC8b { r } => self.pc -= 2,
+            Instruction::DEC8b { r } => {
+                self.pc -= 2;
+                self.decrement_8b(r, mem)?;
+            }
+            Instruction::INC8b { r } => {
+                self.pc -= 2;
+                self.increment_8b(r, mem)?;
+            }
 
             Instruction::DEC16b { r } => self.pc -= 2,
             Instruction::INC16b { r } => self.pc -= 2,
@@ -606,10 +612,8 @@ impl CPU {
         if result < 0 {
             result += 0xff;
             self.set_carry_flag_on();
-            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.set_register_a(result as u8);
         }
 
         self.set_subtraction_flag_on();
@@ -627,13 +631,12 @@ impl CPU {
         if result > 0xff {
             result -= 0xff;
             self.set_carry_flag_on();
-            self.set_register_a(result as u8);
         } else {
             self.set_carry_flag_off();
-            self.set_register_a(result as u8);
         }
 
         self.zero_flag_check(result as u8);
+        self.set_subtraction_flag_off();
         self.set_register_a(result as u8);
     }
     fn zero_flag_check(&mut self, result: u8) {
@@ -713,6 +716,31 @@ impl CPU {
         Ok(())
     }
 
+    fn increment_8b(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r2, mem)? as u16;
+        let mut result = n + 1;
+
+        if (n <= 0b00001000) && (result > 0b00001000) {
+            self.set_halfcarry_flag_on();
+        } else {
+            self.set_halfcarry_flag_off();
+        }
+
+        if result > 0xff {
+            result -= 0xff;
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.zero_flag_check(result as u8);
+        self.set_subtraction_flag_off();
+
+        self.r_table_assign(r, result as u8, mem)?;
+        Ok(())
+    }
+
     fn sub_register(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
         let n = self.r_table_lookup(r, mem)?;
         self.sub_immediate(n);
@@ -723,6 +751,32 @@ impl CPU {
         let n = self.r_table_lookup(r, mem)?;
         self.sbc_immediate(n);
 
+        Ok(())
+    }
+
+    fn decrement_8b(&mut self, r: RegisterID, mem: &mut Memory) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let n = self.r_table_lookup(r2, mem)? as i16;
+        let mut result = n - 1;
+
+        // copied from sub_flag_checks
+        if (n >= 0b00010000) && (result < 0b00001000) {
+            self.set_halfcarry_flag_on();
+        } else {
+            self.set_halfcarry_flag_off();
+        }
+
+        if result < 0 {
+            result += 0xff;
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.set_subtraction_flag_on();
+        self.zero_flag_check(result as u8);
+
+        self.r_table_assign(r, result as u8, mem)?;
         Ok(())
     }
 
