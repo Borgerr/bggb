@@ -97,7 +97,6 @@ impl CPU {
     }
 
     fn reset_flags(&mut self) {
-        // TODO: change flag handling in appropriate instructions
         self.af &= 0xff00;
     }
 
@@ -119,6 +118,35 @@ impl CPU {
             RegisterID::H => hi_byte(self.hl) as u16,
             RegisterID::L => lo_byte(self.hl) as u16,
         }
+    }
+
+    /*
+       again, the following lookups and assigns come from the following link
+       https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+    */
+    fn rp_table_lookup(&mut self, r: RegisterID) -> Result<u16, CpuError> {
+        let result = match r {
+            RegisterID::BC => self.bc,
+            RegisterID::DE => self.de,
+            RegisterID::HL => self.hl,
+            RegisterID::SP => self.sp,
+
+            _ => return Err(CpuError::ReadingFromInvalidReg { r, pc: self.pc }),
+        };
+
+        Ok(result)
+    }
+    fn rp_table_assign(&mut self, r: RegisterID, val: u16) -> Result<(), CpuError> {
+        match r {
+            RegisterID::BC => self.bc = val,
+            RegisterID::DE => self.de = val,
+            RegisterID::HL => self.hl = val,
+            RegisterID::SP => self.sp = val,
+
+            _ => return Err(CpuError::ReadingIntoInvalidReg { r, pc: self.pc }),
+        }
+
+        Ok(())
     }
 
     fn r_table_lookup(&mut self, r: RegisterID, mem: &mut Memory) -> Result<u8, CpuError> {
@@ -210,8 +238,6 @@ impl CPU {
         // The other alternative would be to repeatedly call that
         // and potentially lose information within the opcodes themselves
         match instr {
-            // TODO: within each instruction's respective method,
-            // involve flag changing
             Instruction::NOP => self.pc -= 2, // no operation
             Instruction::ILLEGAL => {
                 self.pc -= 3;
@@ -321,8 +347,14 @@ impl CPU {
                 self.increment_8b(r, mem)?;
             }
 
-            Instruction::DEC16b { r } => self.pc -= 2,
-            Instruction::INC16b { r } => self.pc -= 2,
+            Instruction::DEC16b { r } => {
+                self.pc -= 2;
+                self.decrement_16b(r);
+            }
+            Instruction::INC16b { r } => {
+                self.pc -= 2;
+                self.increment_16b(r);
+            }
 
             Instruction::RLCA => {
                 self.pc -= 2;
@@ -992,4 +1024,8 @@ impl CPU {
         a = (a << 1) | carry_bit;
         self.set_register_a(a);
     }
+
+    fn decrement_16b(&mut self, r: RegisterID) {}
+
+    fn increment_16b(&mut self, r: RegisterID) {}
 }
