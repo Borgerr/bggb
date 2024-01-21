@@ -355,6 +355,7 @@ impl CPU {
                 self.pc -= 2;
                 self.increment_16b(r)?;
             }
+            Instruction::AddHLAndR16 { r } => self.pc -= 2,
 
             Instruction::RLCA => {
                 self.pc -= 2;

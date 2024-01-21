@@ -116,6 +116,8 @@ pub enum Instruction {
     INC8b { r: RegisterID },
     INC16b { r: RegisterID },
 
+    AddHLAndR16 { r: RegisterID },
+
     RLCA,
     RRCA,
     RLA,
@@ -260,9 +262,8 @@ impl Instruction {
             },
             1 => {
                 if q {
-                    Instruction::AddRegisters {
-                        r1: RegisterID::HL,
-                        r2: RegisterID::rp_lookup(p),
+                    Instruction::AddHLAndR16 {
+                        r: RegisterID::rp_lookup(p),
                     }
                 } else {
                     Instruction::Load16 {
