@@ -349,11 +349,11 @@ impl CPU {
 
             Instruction::DEC16b { r } => {
                 self.pc -= 2;
-                self.decrement_16b(r);
+                self.decrement_16b(r)?;
             }
             Instruction::INC16b { r } => {
                 self.pc -= 2;
-                self.increment_16b(r);
+                self.increment_16b(r)?;
             }
 
             Instruction::RLCA => {
@@ -1025,7 +1025,29 @@ impl CPU {
         self.set_register_a(a);
     }
 
-    fn decrement_16b(&mut self, r: RegisterID) {}
+    fn decrement_16b(&mut self, r: RegisterID) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let mut val = self.rp_table_lookup(r2)? as i32;
+        val -= 1;
+        if val < 0 {
+            // check for underflow
+            val += 0xffff;
+        }
+        self.rp_table_assign(r, val as u16)?;
 
-    fn increment_16b(&mut self, r: RegisterID) {}
+        Ok(())
+    }
+
+    fn increment_16b(&mut self, r: RegisterID) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let mut val = self.rp_table_lookup(r2)? as u32;
+        val += 1;
+        if val > 0xffff {
+            // check for overflow
+            val -= 0xffff;
+        }
+        self.rp_table_assign(r, val as u16)?;
+
+        Ok(())
+    }
 }
