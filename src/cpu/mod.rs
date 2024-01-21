@@ -355,7 +355,10 @@ impl CPU {
                 self.pc -= 2;
                 self.increment_16b(r)?;
             }
-            Instruction::AddHLAndR16 { r } => self.pc -= 2,
+            Instruction::AddHLAndR16 { r } => {
+                self.pc -= 2;
+                self.add_hl_and_r16(r)?;
+            }
 
             Instruction::RLCA => {
                 self.pc -= 2;
@@ -636,7 +639,7 @@ impl CPU {
     }
 
     fn sub_flag_checks(&mut self, mut result: i16, prev_val: i16) {
-        if (prev_val >= 0b00010000) && (result < 0b00001000) {
+        if (prev_val >= 0b00010000) && (result < 0b00010000) {
             self.set_halfcarry_flag_on();
         } else {
             self.set_halfcarry_flag_off();
@@ -655,7 +658,7 @@ impl CPU {
         self.set_register_a(result as u8);
     }
     fn add_flag_checks(&mut self, mut result: u16, prev_val: u16) {
-        if (prev_val <= 0b00001000) && (result > 0b00001000) {
+        if (prev_val <= 0b00001111) && (result >= 0b00010000) {
             self.set_halfcarry_flag_on();
         } else {
             self.set_halfcarry_flag_off();
@@ -1049,6 +1052,33 @@ impl CPU {
         }
         self.rp_table_assign(r, val as u16)?;
 
+        Ok(())
+    }
+
+    fn add_hl_and_r16(&mut self, r: RegisterID) -> Result<(), CpuError> {
+        let r2 = r.clone();
+        let hl = self.hl as u32;
+        let r16 = self.rp_table_lookup(r2)? as u32;
+        let mut result = hl + r16;
+
+        if result > 0xffff {
+            result -= 0xffff;
+            self.set_carry_flag_on();
+        } else {
+            self.set_carry_flag_off();
+        }
+
+        self.set_subtraction_flag_off(); // N -> 0
+
+        // check for overflow from bit 11
+        let bit_11 = 0b1 << 12;
+        if (hl < bit_11) && (result >= bit_11) {
+            self.set_halfcarry_flag_on();
+        } else {
+            self.set_halfcarry_flag_off();
+        }
+
+        self.hl = result as u16;
         Ok(())
     }
 }
