@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 use instructions::{Instruction, RegisterID};
 
 use crate::memory::Memory;
@@ -5,7 +7,7 @@ use crate::memory::Memory;
 mod instr_execute;
 mod instructions;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Error)]
 pub enum CpuError {
     FetchError { pc: u16 },
     IllegalInstruction { pc: u16 },

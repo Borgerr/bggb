@@ -1,10 +1,12 @@
 use std::ops::{Index, IndexMut};
 
+use thiserror::Error;
+
 use self::cartridgeheader::{CartridgeHeader, CartridgeType};
 
 mod cartridgeheader;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Error)]
 pub enum MemoryError {
     CartTypeMismatch { ct: CartridgeType, reason: String },
     UnsupportedCartType { ct: CartridgeType },
