@@ -1,5 +1,5 @@
-use crate::cpu::{c_flag, CPU, CpuError, hi_byte};
 use crate::cpu::instructions::RegisterID;
+use crate::cpu::{c_flag, cpuerror::CpuError, hi_byte, CPU};
 use crate::memory::Memory;
 
 impl CPU {

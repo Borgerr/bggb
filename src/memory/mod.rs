@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 use thiserror::Error;
 
@@ -10,6 +13,16 @@ mod cartridgeheader;
 pub enum MemoryError {
     CartTypeMismatch { ct: CartridgeType, reason: String },
     UnsupportedCartType { ct: CartridgeType },
+}
+
+impl Display for MemoryError {
+    // TODO: REMEMBER TO IMPLEMENT THIS IF WE END UP USING IT!!!
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CartTypeMismatch { ct, reason } => todo!(),
+            Self::UnsupportedCartType { ct } => todo!(),
+        }
+    }
 }
 
 pub struct Memory {

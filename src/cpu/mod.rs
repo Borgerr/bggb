@@ -1,20 +1,12 @@
-use thiserror::Error;
-
 use instructions::{Instruction, RegisterID};
 
 use crate::memory::Memory;
 
+mod cpuerror;
 mod instr_execute;
 mod instructions;
 
-#[derive(Debug, Clone, Eq, PartialEq, Error)]
-pub enum CpuError {
-    FetchError { pc: u16 },
-    IllegalInstruction { pc: u16 },
-    ReadingIntoInvalidReg { r: RegisterID, pc: u16 },
-    ReadingFromInvalidReg { r: RegisterID, pc: u16 },
-    IndexOutOfBounds { index: usize, pc: u16 },
-}
+use cpuerror::CpuError;
 
 fn z_flag(af: u16) -> bool {
     ((af >> 6) & 0b1) == 0b1
@@ -241,6 +233,7 @@ impl CPU {
         // and do that in one call to `Instruction::from_bytes`.
         // The other alternative would be to repeatedly call that
         // and potentially lose information within the opcodes themselves
+        // All instructions implementations can be found in the instr_execute submodule
         match instr {
             Instruction::NOP => self.pc -= 2, // no operation
             Instruction::ILLEGAL => {
@@ -506,8 +499,4 @@ impl CPU {
 
         Ok(())
     }
-
-    /*
-       instructions are in submodule instr_execute
-    */
 }

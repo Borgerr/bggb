@@ -1,5 +1,5 @@
-use crate::cpu::{CPU, CpuError, lo_byte};
 use crate::cpu::instructions::RegisterID;
+use crate::cpu::{cpuerror::CpuError, lo_byte, CPU};
 use crate::memory::Memory;
 
 impl CPU {

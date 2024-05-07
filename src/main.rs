@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     // read the whole file
     f.read_to_end(&mut rom_data)?;
 
-    let mem = Memory::from(rom_data).unwrap();
+    let mem = Memory::from(rom_data).expect("Memory given was invalid and cannot be read");
 
     Ok(())
 }

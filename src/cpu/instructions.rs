@@ -1,3 +1,7 @@
+// https://gb-archive.github.io/salvage/decoding_gbz80_opcodes/Decoding%20Gamboy%20Z80%20Opcodes.html
+
+use std::fmt::Display;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RegisterID {
     AF,
@@ -51,6 +55,33 @@ impl RegisterID {
         }
     }
 }
+
+impl Display for RegisterID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::AF => "AF",
+                Self::BC => "BC",
+                Self::DE => "DE",
+                Self::HL => "HL",
+                Self::SP => "SP",
+                Self::A => "A",
+                Self::B => "B",
+                Self::C => "C",
+                Self::D => "D",
+                Self::E => "E",
+                Self::H => "H",
+                Self::L => "L",
+                Self::HLplus => "HL+",
+                Self::HLminus => "HL-",
+                Self::HLaddress => "(HL)",
+            }
+        )
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum FlagID {
     NZ,
