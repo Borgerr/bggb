@@ -26,7 +26,7 @@ impl Display for MemoryError {
 }
 
 pub struct Memory {
-    header: CartridgeHeader,
+    pub header: CartridgeHeader,
     rom: Vec<u8>,
     switchable_banks: Vec<Vec<u8>>,
     ram: Vec<u8>,

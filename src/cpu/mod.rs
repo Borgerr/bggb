@@ -2,7 +2,7 @@ use instructions::{Instruction, RegisterID};
 
 use crate::memory::Memory;
 
-mod cpuerror;
+pub mod cpuerror;
 mod instr_execute;
 mod instructions;
 
@@ -29,7 +29,7 @@ fn lo_byte(x: u16) -> u8 {
     (x & 0xff) as u8
 }
 
-struct CPU {
+pub struct CPU {
     af: u16, // accumulator & flags
     bc: u16, // BC register
     de: u16, // DE register
@@ -41,6 +41,28 @@ struct CPU {
 }
 
 impl CPU {
+    pub fn new(pc: u16, interrupts_enabled: bool, header_checksum: u8) -> Self {
+        let mut cpu = CPU {
+            af: 0,
+            bc: 0,
+            de: 0,
+            hl: 0,
+            sp: 0,
+            pc,
+            interrupts_enabled,
+        };
+
+        if header_checksum == 0 {
+            cpu.set_carry_flag_off();
+            cpu.set_halfcarry_flag_off();
+        } else {
+            cpu.set_carry_flag_on();
+            cpu.set_halfcarry_flag_on();
+        }
+
+        cpu
+    }
+
     fn set_carry_flag_on(&mut self) {
         let flags = lo_byte(self.af) | 0b1000;
         self.af &= 0xff00;

@@ -145,7 +145,7 @@ pub struct CartridgeHeader {
     destination_code: u8,     // 014a, single byte
     old_licensee: u8,         // 014b, single byte, can change to enum
     version_number: u8,       // 014c, single byte
-    header_checksum: u8,      // 014d, single byte
+    pub header_checksum: u8,  // 014d, single byte
     global_checksum: [u8; 2], // 014e-014f, two bytes
 }
 
